@@ -1,0 +1,16 @@
+name: 22_dompc_paper
+channels:
+  - defaults
+dependencies:
+  - python=3.9
+  - scipy
+  - ipython
+  - scikit-learn
+  - numpy
+  - pip
+  - matplotlib
+  - jupyter
+  - notebook
+  - pip:
+    - casadi
+prefix: /usr/local/Caskroom/miniconda/base/envs/22_dompc_paper

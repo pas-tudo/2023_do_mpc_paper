@@ -11,6 +11,10 @@ dependencies:
   - matplotlib
   - jupyter
   - notebook
+  - casadi
+  - keras
+  - pandas
+  - control
   - pip:
-    - casadi
+    - do_mpc
 prefix: /usr/local/Caskroom/miniconda/base/envs/22_dompc_paper

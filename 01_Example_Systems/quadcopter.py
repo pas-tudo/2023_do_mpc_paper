@@ -21,23 +21,26 @@ class Quadcopter:
         self.d_t = 0.005964552 # linear thrust to torque relationship
 
         self.d = 40*1e-3
-        self.d_y = self.d*np.sin([np.pi/8,np.pi/8,-np.pi/8,-np.pi/8]) # position of rotors in body frame [m]
-        self.d_x = self.d*np.array([np.pi/8,-np.pi/8,np.pi/8,-np.pi/8])*1e-3 # position of rotors in body frame [m]
+        self.d_y = self.d*np.sin([np.pi/8, np.pi/8,-np.pi/8,-np.pi/8]) # position of rotors in body frame [m]
+        self.d_x = self.d*np.sin([np.pi/8,-np.pi/8, np.pi/8,-np.pi/8]) # position of rotors in body frame [m]
 
-        self.D = np.stack([self.d_y, self.d_x, self.d_t*np.array([1,-1,1,-1])])
+        self.D = np.stack([self.d_y, self.d_x, self.d_t*np.array([1,-1,-1,1])])
 
         self.m = 28*1e-3 # mass [g]
 
         self.g = np.array([0,0,9.81]) # gravity vector [m/s2]
 
         # Initialize model
-
         self.model = do_mpc.model.Model('continuous')
         self.pos = self.model.set_variable('_x',  'pos', (3,1))
         self.dpos = self.model.set_variable('_x',  'dpos', (3,1))
         self.phi = self.model.set_variable('_x',  'phi', (3,1)) # yaw, pitch, roll
         self.omega = self.model.set_variable('_x',  'omega', (3,1))
         self.f = self.model.set_variable('_u',  'thrust',(4,1))
+
+        self.pos_setpoint = self.model.set_variable('_tvp', 'pos_setpoint', (3,1))
+        self.dpos_setpoint = self.model.set_variable('_tvp',  'dpos_setpoint', (3,1))
+        self.setpoint_mode = self.model.set_variable('_tvp',  'setpoint_weight', (2,1))
 
         # Prepare intermediates
         self.F = vertcat(0,0,sum1(self.f))
@@ -119,6 +122,8 @@ class MeasuredBiasedQuadcopter(BiasedQuadcopter):
         return self.model
 
 
+# Some helper functions
+
 def rot_mat(alpha,beta, gamma):
     """Auxiliary function to compute the rotation matrix.
     
@@ -154,3 +159,16 @@ def rot_mat(alpha,beta, gamma):
         ),
     )
     return R
+
+
+def print_progress(k,N, bar_len = 50):
+    k = int(max(min(k,N),0))
+    percent_done = round(100*(k)/(N-1))
+
+    done = round(percent_done/(100/bar_len))
+    togo = bar_len-done
+    done_str = '█'*done
+    togo_str = '░'*togo
+
+    msg = f"\t Progress: [{done_str}{togo_str}] {percent_done}% done"
+    print(msg, end='\r')

@@ -42,12 +42,12 @@ class Quadcopter:
         self.dpos_setpoint = self.model.set_variable('_tvp',  'dpos_setpoint', (3,1))
         self.setpoint_mode = self.model.set_variable('_tvp',  'setpoint_weight', (2,1))
 
+
+    def get_model(self, process_noise=False):
         # Prepare intermediates
         self.F = vertcat(0,0,sum1(self.f))
         self.R = rot_mat(self.phi[0],self.phi[1],self.phi[2])
         self.ddpos = 1/self.m*self.R@self.F - self.g 
-
-    def get_model(self, process_noise=False):
         # Compute dphi and domega
         dphi = self.R@self.omega
         domega = np.linalg.inv(self.J)@(self.D@self.f-cross(self.omega,self.J@self.omega))
@@ -60,9 +60,8 @@ class Quadcopter:
 
         self.model.setup()
 
-        return self.model
 
-    def stable_point(self, pos_setpoint, p=0, v=0, w=0):
+    def stable_point(self, pos_setpoint, p=0, v=0, w=0, tpv=0):
         """Stable point for the quadcopter model given a setpoint_pos and the configured model.
         """
 
@@ -73,7 +72,7 @@ class Quadcopter:
 
         lbx = vertcat(self.model.x(-np.inf), self.model.u(0))
 
-        nlp = {'x':vertcat(self.model.x, self.model.u), 'f': f, 'g':self.model._rhs, 'p':vertcat(self.model.p, self.model.v, self.model.w)}
+        nlp = {'x':vertcat(self.model.x, self.model.u), 'f': f, 'g':self.model._rhs, 'p':vertcat(self.model.p, self.model.v, self.model.w, self.model.tvp)}
         S = nlpsol('S', 'ipopt', nlp)
         r = S(lbg=0,ubg=0, lbx=lbx, p=vertcat(self.model.p(p), self.model.v(v), self.model.w(w)))
 
@@ -81,6 +80,28 @@ class Quadcopter:
         x_lin, u_lin = np.split(r['x'],[self.model.n_x])
 
         return x_lin, u_lin
+
+class WeightUncertainQuadcopter(Quadcopter):
+    """Modified Version of quadcopter model with uncertain mass.
+    """
+    def __init__(self):
+        super().__init__()
+
+    def get_model(self, *args, **kwargs):
+        # Compute dphi and domega
+        self.mass_factor = self.model.set_variable('_p', 'mass_factor', (1,1))
+        self.m = self.m*self.mass_factor
+
+        self.int_offset_pos = self.model.set_variable('_x', 'int_offset_pos', (3,1))
+        self.int_offset_dpos = self.model.set_variable('_x', 'int_offset_dpos', (3,1))
+
+        self.offset_pos = self.model.set_expression('offset_pos', self.pos_setpoint-self.pos)
+        self.offset_dpos = self.model.set_expression('doffset_pos', self.dpos_setpoint-self.dpos)
+
+        self.model.set_rhs('int_offset_pos', self.offset_pos)
+        self.model.set_rhs('int_offset_dpos',self.offset_dpos)
+
+        super().get_model(*args, **kwargs)
 
 class BiasedQuadcopter(Quadcopter):
     """Modified Version of a quadcopter model with a bias in the acceleration and gyro measurements.
@@ -101,7 +122,6 @@ class BiasedQuadcopter(Quadcopter):
 
         super().get_model(*args, **kwargs)
 
-        return self.model
 
 class MeasuredBiasedQuadcopter(BiasedQuadcopter):
     """Modified Version of a quadcopter model with a bias in the acceleration and gyro measurements.
@@ -119,7 +139,6 @@ class MeasuredBiasedQuadcopter(BiasedQuadcopter):
 
         super().get_model(process_noise=True)
 
-        return self.model
 
 
 # Some helper functions

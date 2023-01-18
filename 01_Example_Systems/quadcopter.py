@@ -19,38 +19,42 @@ class Quadcopter:
             ])*1e-6 # inertia [kg/m2]
 
         self.d_t = 0.005964552 # linear thrust to torque relationship
+        self.d_t *= np.array([1,-1,-1,1]) # motor spin directions
 
-        self.d = 40*1e-3
-        self.d_y = self.d*np.sin([np.pi/8, np.pi/8,-np.pi/8,-np.pi/8]) # position of rotors in body frame [m]
-        self.d_x = self.d*np.sin([np.pi/8,-np.pi/8, np.pi/8,-np.pi/8]) # position of rotors in body frame [m]
+        self.l_a = 40*1e-3 # Arm length [m] of the quadcopter
+        self.d_y = self.l_a*np.sin([np.pi/4, np.pi/4,-np.pi/4,-np.pi/4]) # position of rotors in body frame [m]
+        self.d_x = self.l_a*np.sin([np.pi/4,-np.pi/4, np.pi/4,-np.pi/4]) # position of rotors in body frame [m]
 
-        self.D = np.stack([self.d_y, self.d_x, self.d_t*np.array([1,-1,-1,1])])
+        self.D = np.stack([self.d_y, -self.d_x, self.d_t])
 
-        self.m = 28*1e-3 # mass [g]
+        self.m = 28*1e-3 # mass [kg]
 
         self.g = np.array([0,0,9.81]) # gravity vector [m/s2]
 
         # Initialize model
         self.model = do_mpc.model.Model('continuous')
-        self.pos = self.model.set_variable('_x',  'pos', (3,1))
-        self.dpos = self.model.set_variable('_x',  'dpos', (3,1))
-        self.phi = self.model.set_variable('_x',  'phi', (3,1)) # yaw, pitch, roll
-        self.omega = self.model.set_variable('_x',  'omega', (3,1))
-        self.f = self.model.set_variable('_u',  'thrust',(4,1))
+        self.pos = self.model.set_variable('_x',  'pos', (3,1)) # Position in inertial frame
+        self.dpos = self.model.set_variable('_x',  'dpos', (3,1)) # Velocity in inertial frame
+        self.phi = self.model.set_variable('_x',  'phi', (3,1)) # Orientation in inertial frame (yaw, pitch, roll)
+        self.omega = self.model.set_variable('_x',  'omega', (3,1)) # Angular velocity in body frame
+        self.f = self.model.set_variable('_u',  'thrust',(4,1)) # Thrust of each rotor
 
         self.pos_setpoint = self.model.set_variable('_tvp', 'pos_setpoint', (3,1))
         self.dpos_setpoint = self.model.set_variable('_tvp',  'dpos_setpoint', (3,1))
-        self.setpoint_mode = self.model.set_variable('_tvp',  'setpoint_weight', (2,1))
+        self.phi_setpoint = self.model.set_variable('_tvp',  'phi_setpoint', (3,1))
+        self.omega_setpoint = self.model.set_variable('_tvp',  'omega_setpoint', (3,1))
+        self.setpoint_weights = self.model.set_variable('_tvp',  'setpoint_weight', (4,1))
 
 
     def get_model(self, process_noise=False):
         # Prepare intermediates
-        self.F = vertcat(0,0,sum1(self.f))
-        self.R = rot_mat(self.phi[0],self.phi[1],self.phi[2])
-        self.ddpos = 1/self.m*self.R@self.F - self.g 
+        self.F = vertcat(0,0,sum1(self.f)) # total force in body frame
+        self.R = rot_mat(self.phi[0],self.phi[1],self.phi[2]) # rotation matrix from body to inertial frame
+        self.ddpos = 1/self.m*self.R@self.F - self.g # acceleration in inertial frame 
         # Compute dphi and domega
-        dphi = self.R@self.omega
-        domega = np.linalg.inv(self.J)@(self.D@self.f-cross(self.omega,self.J@self.omega))
+        dphi = self.model.set_expression('dphi', self.R@self.omega) # angular velocity in inertial frame
+        domega = np.linalg.inv(self.J)@(self.D@self.f-cross(self.omega,self.J@self.omega)) # angular acceleration in body frame
+
 
         # Set all RHS
         self.model.set_rhs('pos', self.dpos, process_noise=process_noise)

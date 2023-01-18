@@ -2,18 +2,19 @@ from .basic import Sphere, Line, Arrow
 
 import numpy as np
 
-class Uav:
+class DronePlot:
     '''
     Draws a quadrotor at a given position, with a given attitude.
     '''
 
     def __init__(self, ax, quadcopter, scale = 1):
         '''
-        Initialize the quadrotr plotting parameters.
+        Initialize the drone plotting parameters.
 
         Params:
             ax: (matplotlib axis) the axis where the sphere should be drawn
             quadcopter: Instance of quadcopter class
+            scale: (float) scale of the quadrotor (increase size for better visability)
 
         Returns:
             None

@@ -22,7 +22,7 @@ class DronePlot:
 
         self.ax = ax
 
-        d = quadcopter.d * scale 
+        d = quadcopter.l_a * scale 
         motor_size = d/10
         body_size = d/5
 

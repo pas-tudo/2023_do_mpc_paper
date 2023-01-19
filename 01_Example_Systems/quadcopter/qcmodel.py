@@ -65,7 +65,7 @@ class Quadcopter:
         self.model.setup()
 
 
-    def stable_point(self, pos_setpoint, p=0, v=0, w=0, tpv=0):
+    def stable_point(self, pos_setpoint, p=0, v=0, w=0, tvp=0):
         """Stable point for the quadcopter model given a setpoint_pos and the configured model.
         """
 
@@ -77,8 +77,9 @@ class Quadcopter:
         lbx = vertcat(self.model.x(-np.inf), self.model.u(0))
 
         nlp = {'x':vertcat(self.model.x, self.model.u), 'f': f, 'g':self.model._rhs, 'p':vertcat(self.model.p, self.model.v, self.model.w, self.model.tvp)}
-        S = nlpsol('S', 'ipopt', nlp)
-        r = S(lbg=0,ubg=0, lbx=lbx, p=vertcat(self.model.p(p), self.model.v(v), self.model.w(w)))
+        opts = {'ipopt.print_level':0, 'ipopt.sb': 'yes', 'print_time':0}
+        S = nlpsol('S', 'ipopt', nlp, opts)
+        r = S(lbg=0,ubg=0, lbx=lbx, p=vertcat(self.model.p(p), self.model.v(v), self.model.w(w), self.model.tvp(tvp)))
 
 
         x_lin, u_lin = np.split(r['x'],[self.model.n_x])

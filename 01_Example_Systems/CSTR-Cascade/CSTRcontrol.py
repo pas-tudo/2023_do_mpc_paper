@@ -50,6 +50,8 @@ def get_MPC(t_step: float, CSTR: CSTRmodel.CSTR_Cascade) -> Tuple[do_mpc.control
         'n_horizon': 35,
         't_step': t_step,   
         'store_full_solution': True,
+        'collocation_deg': 4,
+        'collocation_ni':1,
         # Use MA27 linear solver in ipopt for faster calculations:
         'nlpsol_opts': {'ipopt.linear_solver': 'mumps'}
     }
@@ -153,7 +155,35 @@ def get_MPC(t_step: float, CSTR: CSTRmodel.CSTR_Cascade) -> Tuple[do_mpc.control
     mpc.bounds['upper','_x','cR']=ub_cR
     mpc.bounds['upper','_x','cS']=ub_cS
     mpc.bounds['upper','_x','Tr']=ub_Tr
+    """"
+    #mpc.prepare_nlp()
 
+    # Create new constraint: Feeding amount A not greater than 1.5
+    for i in range(mpc.n_horizon):
+        extra_cons = sum1(mpc.opt_x['_u', i,0,'uA'])
+        mpc.nlp_cons.append(
+            extra_cons
+        )
+
+    # Create appropriate upper and lower bound (here they are both 0 to create an equality constraint)
+    mpc.nlp_cons_lb.append(np.zeros((mpc.n_horizon,1)))
+    mpc.nlp_cons_ub.append(ub_uA*np.ones((mpc.n_horizon,1)))
+
+    # Create new constraint: Feeding amount B not greater than 1.5
+    for i in range(mpc.n_horizon ):
+        extra_cons = sum1(mpc.opt_x['_u', i,0,'uB'])
+        mpc.nlp_cons.append(
+            extra_cons
+        )
+
+    # Create appropriate upper and lower bound (here they are both 0 to create an equality constraint)
+    mpc.nlp_cons_lb.append(np.zeros((mpc.n_horizon,1)))
+    mpc.nlp_cons_ub.append(ub_uB*np.ones((mpc.n_horizon,1)))
+
+    mpc.create_nlp() """
+
+    mpc.set_nl_cons('u_A',sum1(CSTR.model.u['uA']),ub=ub_uA,soft_constraint=False)
+    mpc.set_nl_cons('u_B',sum1(CSTR.model.u['uB']),ub=ub_uB,soft_constraint=False)
     mpc.setup()
     x_0=0*np.ones((CSTR.nx,1))
     x_0[-CSTR.n_reac:]=CSTR.Tr_in

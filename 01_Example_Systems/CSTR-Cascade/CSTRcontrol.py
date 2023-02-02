@@ -34,16 +34,19 @@ def get_simulator(t_step: float, CSTR: CSTRmodel.CSTR_Cascade) -> do_mpc.simulat
     simulator = do_mpc.simulator.Simulator(CSTR.model)
     simulator.set_param(t_step = t_step)
 
-    # Pass dummy tvp fCSTR.n_reaction (these wont affect the simulation)
+    # Pass dummy tvp (these wont affect the simulation)
     sim_tvp_template = simulator.get_tvp_template()
     simulator.set_tvp_fun(lambda t: sim_tvp_template)
+
+    sim_p_template = simulator.get_p_template()
+    simulator.set_p_fun(lambda t: sim_p_template)
 
     simulator.setup()
 
     return simulator
 
 # %%
-def get_MPC(t_step: float, CSTR: CSTRmodel.CSTR_Cascade) -> Tuple[do_mpc.controller.MPC, Any]:
+def get_MPC(t_step: float, CSTR: CSTRmodel.CSTR_Cascade, n_robust: int, n_scenarios: int) -> Tuple[do_mpc.controller.MPC, Any]:
     mpc = do_mpc.controller.MPC(CSTR.model)
 
     setup_mpc = {
@@ -52,6 +55,7 @@ def get_MPC(t_step: float, CSTR: CSTRmodel.CSTR_Cascade) -> Tuple[do_mpc.control
         'store_full_solution': True,
         'collocation_deg': 4,
         'collocation_ni':1,
+        'n_robust':n_robust,
         # Use MA27 linear solver in ipopt for faster calculations:
         'nlpsol_opts': {'ipopt.linear_solver': 'mumps'}
     }
@@ -64,6 +68,11 @@ def get_MPC(t_step: float, CSTR: CSTRmodel.CSTR_Cascade) -> Tuple[do_mpc.control
     def mpc_tvp_fun(t_now):
         return mpc_tvp_template
     mpc.set_tvp_fun(mpc_tvp_fun)
+
+    mpc_p_template = mpc.get_p_template(n_scenarios)
+    def mpc_p_fun(t_now):
+        return mpc_p_template
+    mpc.set_tvp_fun(mpc_p_fun)
 
     # Constraints
     lb_x=0*np.ones((CSTR.nx,1))
@@ -155,32 +164,6 @@ def get_MPC(t_step: float, CSTR: CSTRmodel.CSTR_Cascade) -> Tuple[do_mpc.control
     mpc.bounds['upper','_x','cR']=ub_cR
     mpc.bounds['upper','_x','cS']=ub_cS
     mpc.bounds['upper','_x','Tr']=ub_Tr
-    """"
-    #mpc.prepare_nlp()
-
-    # Create new constraint: Feeding amount A not greater than 1.5
-    for i in range(mpc.n_horizon):
-        extra_cons = sum1(mpc.opt_x['_u', i,0,'uA'])
-        mpc.nlp_cons.append(
-            extra_cons
-        )
-
-    # Create appropriate upper and lower bound (here they are both 0 to create an equality constraint)
-    mpc.nlp_cons_lb.append(np.zeros((mpc.n_horizon,1)))
-    mpc.nlp_cons_ub.append(ub_uA*np.ones((mpc.n_horizon,1)))
-
-    # Create new constraint: Feeding amount B not greater than 1.5
-    for i in range(mpc.n_horizon ):
-        extra_cons = sum1(mpc.opt_x['_u', i,0,'uB'])
-        mpc.nlp_cons.append(
-            extra_cons
-        )
-
-    # Create appropriate upper and lower bound (here they are both 0 to create an equality constraint)
-    mpc.nlp_cons_lb.append(np.zeros((mpc.n_horizon,1)))
-    mpc.nlp_cons_ub.append(ub_uB*np.ones((mpc.n_horizon,1)))
-
-    mpc.create_nlp() """
 
     mpc.set_nl_cons('u_A',sum1(CSTR.model.u['uA']),ub=ub_uA,soft_constraint=False)
     mpc.set_nl_cons('u_B',sum1(CSTR.model.u['uB']),ub=ub_uB,soft_constraint=False)
@@ -191,3 +174,5 @@ def get_MPC(t_step: float, CSTR: CSTRmodel.CSTR_Cascade) -> Tuple[do_mpc.control
     mpc.set_initial_guess()
 
     return mpc, mpc_tvp_template
+
+

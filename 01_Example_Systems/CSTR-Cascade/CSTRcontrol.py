@@ -63,6 +63,7 @@ def get_MPC(t_step: float, CSTR: CSTRmodel.CSTR_Cascade, n_robust: int, n_scenar
 
     surpress_ipopt = {'ipopt.print_level':0, 'ipopt.sb': 'yes', 'print_time':0}
     mpc.set_param(nlpsol_opts = surpress_ipopt)
+    #mpc.set_param(nlpsol_opts = {})
 
     mpc_tvp_template = mpc.get_tvp_template()
     def mpc_tvp_fun(t_now):
@@ -72,7 +73,7 @@ def get_MPC(t_step: float, CSTR: CSTRmodel.CSTR_Cascade, n_robust: int, n_scenar
     mpc_p_template = mpc.get_p_template(n_scenarios)
     def mpc_p_fun(t_now):
         return mpc_p_template
-    mpc.set_tvp_fun(mpc_p_fun)
+    mpc.set_p_fun(mpc_p_fun)
 
     # Constraints
     lb_x=0*np.ones((CSTR.nx,1))
@@ -167,12 +168,51 @@ def get_MPC(t_step: float, CSTR: CSTRmodel.CSTR_Cascade, n_robust: int, n_scenar
 
     mpc.set_nl_cons('u_A',sum1(CSTR.model.u['uA']),ub=ub_uA,soft_constraint=False)
     mpc.set_nl_cons('u_B',sum1(CSTR.model.u['uB']),ub=ub_uB,soft_constraint=False)
+
+    mpc.scaling['_x', 'cA'] = 1.5
+    mpc.scaling['_x', 'cB'] = 1.5
+    mpc.scaling['_x', 'cR'] = 1.5
+    mpc.scaling['_x', 'cS'] = 0.12
+    mpc.scaling['_x', 'Tr'] = 80
+    mpc.scaling['_u', 'Tj'] = 80
+    mpc.scaling['_u', 'uA'] = 1.5
+    mpc.scaling['_u', 'uB'] = 1.5
+
     mpc.setup()
     x_0=0*np.ones((CSTR.nx,1))
     x_0[-CSTR.n_reac:]=CSTR.Tr_in
     mpc.x0 = x_0
     mpc.set_initial_guess()
 
-    return mpc, mpc_tvp_template
+    return mpc, mpc_tvp_template, mpc_p_template
 
+# %% LQR
+def template_lqr(model,t_sample):
+    """
+    --------------------------------------------------------------------------
+    template_lqr: tuning parameters
+    --------------------------------------------------------------------------
+    """
+    model_dc = model.discretize(t_sample)
+    
+    # Initialize the controller
+    lqr = do_mpc.controller.LQR(model_dc)
+    
+    # Initialize parameters
+    setup_lqr = {'n_horizon':None,
+              't_step':t_sample}
+    lqr.set_param(**setup_lqr)
+    
+    # Set objective
+    Q = np.eye(model.n_x)
+    R = 1*np.eye(model.n_u)
+    Rdelu = np.eye(model.n_u)
+    
+    lqr.set_objective(Q=Q, R=R)#, Rdelu=Rdelu)
+    
+    # set up lqr
+    lqr.setup()
+    # returns lqr
+    return lqr
 
+# %%

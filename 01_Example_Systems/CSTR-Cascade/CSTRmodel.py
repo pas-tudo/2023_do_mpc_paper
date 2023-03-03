@@ -81,8 +81,6 @@ class CSTR_Cascade:
 
 
 
-
-
 def print_progress(k,N, bar_len = 50):
     k = int(max(min(k,N),0))
     percent_done = round(100*(k)/(N-1))

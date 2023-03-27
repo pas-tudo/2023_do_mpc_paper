@@ -30,6 +30,17 @@ import do_mpc
 import qcmodel
 from plot_results import plot_results
     
+
+# %% 
+# Default global variables
+
+_variance_state_noise =  np.array([
+            1e-2, 1e-2, 1e-2,
+            0,0,0,
+            0,0,0,
+            0,0,0
+        ]).reshape(-1,1)
+
 # %%
 # Generate simulator for the quadcopter model
 def get_simulator(t_step: float, qc: qcmodel.Quadcopter) -> do_mpc.simulator.Simulator:
@@ -60,7 +71,7 @@ def get_LQR(t_step: float, qc: qcmodel.Quadcopter,
 
     # Discrete time inifinite horizon LQR
     lqr = do_mpc.controller.LQR(linearmodel)
-    lqr.set_param(t_sample = t_step, n_horizon = None)
+    lqr.set_param(n_horizon = None)
 
     # Default Q and R matrices or values from argument
     if Q is None:
@@ -134,35 +145,29 @@ def get_MPC(t_step: float, qc: qcmodel.Quadcopter) -> Tuple[do_mpc.controller.MP
 # %%
 # %%
 
-def test_lqr(
+def lqr_flyto(
         simulator: do_mpc.simulator.Simulator, 
         lqr: do_mpc.controller.LQR, 
-        qc: qcmodel.Quadcopter,
+        v_x: Union[np.ndarray, float] = None,
+        pos_setpoint: Optional[np.ndarray] = np.ones((3,1)),
+        N_iter: Optional[int] = 60,
     ) -> Tuple[plt.Figure, plt.axes]:
 
+    if v_x is None:
+        v_x = _variance_state_noise
 
-    simulator.reset_history()
+    
+    # Update setpoint
+    x_ss = np.zeros((12,1))
+    x_ss[:3,:] = pos_setpoint
 
-    x0 = np.zeros((12,1))
-    simulator.x0 = x0
+    lqr.set_setpoint(xss = x_ss)
+    x0 = simulator.x0
 
-    sig_dist = np.array([
-        1e-2, 1e-2, 1e-2,
-        0,0,0,
-        0,0,0,
-        0,0,0
-    ]).reshape(-1,1)
-
-    N_iter = 60
     for k in range(N_iter):
         u0 = lqr.make_step(x0)
         u0 = np.clip(u0, 0, 0.3)
-        x0 = simulator.make_step(u0) + np.random.randn(12,1)*sig_dist
-
-
-    fig, ax = plot_results(qc, simulator.data, figsize=(12,8))
-
-    return fig, ax
+        x0 = simulator.make_step(u0) + np.random.randn(12,1)*v_x
 
 
 def mpc_flyto(
@@ -182,12 +187,7 @@ def mpc_flyto(
     tvp_template['_tvp',:, 'setpoint_weight', 3] = 1 # [pos, dpos, omega, phi] weights
 
     if v_x is None:
-        v_x = np.array([
-            1e-2, 1e-2, 1e-2,
-            0,0,0,
-            0,0,0,
-            0,0,0
-        ]).reshape(-1,1)
+        v_x = _variance_state_noise
 
     x0 = simulator.x0
     for k in range(N_iter):

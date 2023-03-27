@@ -1,5 +1,7 @@
 import numpy as np
 from casadi import *
+import sys
+sys.path.append(os.path.join('..', '..', '..', 'do-mpc'))
 import do_mpc
 
 class Quadcopter:

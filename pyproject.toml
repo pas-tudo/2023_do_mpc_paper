@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "2022-do-mpc-paper"
+version = "0.1.0"
+description = "Source for the results presented in the do-mpc paper."
+authors = ["4flixt <32864011+4flixt@users.noreply.github.com>"]
+readme = "README.md"
+packages = [{include = "2022_do_mpc_paper"}]
+
+[tool.poetry.dependencies]
+python = ">3.8, <3.10"
+ipython = "^8.11.0"
+do-mpc = "^4.5.1"
+pandas = "^1.5.3"
+scipy = "^1.0"
+tensorflow = "^2.10"
+autopep8 = "^2.0.2"
+nbconvert = "^7.2.10"
+
+
+[tool.poetry.group.dev.dependencies]
+jupyterlab = "^3.6.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

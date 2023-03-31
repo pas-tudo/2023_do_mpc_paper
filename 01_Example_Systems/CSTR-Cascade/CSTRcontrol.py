@@ -43,7 +43,7 @@ def get_simulator(t_step: float, CSTR: CSTRmodel.CSTR_Cascade) -> do_mpc.simulat
 
     simulator.setup()
 
-    return simulator
+    return simulator, sim_tvp_template, sim_p_template
 
 # %%
 def get_MPC(t_step: float, CSTR: CSTRmodel.CSTR_Cascade, n_robust: int, n_scenarios: int) -> Tuple[do_mpc.controller.MPC, Any]:
@@ -62,7 +62,7 @@ def get_MPC(t_step: float, CSTR: CSTRmodel.CSTR_Cascade, n_robust: int, n_scenar
     mpc.set_param(**setup_mpc)
 
     surpress_ipopt = {'ipopt.print_level':0, 'ipopt.sb': 'yes', 'print_time':0}
-    mpc.set_param(nlpsol_opts = surpress_ipopt)
+    # mpc.set_param(nlpsol_opts = surpress_ipopt)
     #mpc.set_param(nlpsol_opts = {})
 
     mpc_tvp_template = mpc.get_tvp_template()
@@ -75,9 +75,6 @@ def get_MPC(t_step: float, CSTR: CSTRmodel.CSTR_Cascade, n_robust: int, n_scenar
         return mpc_p_template
     mpc.set_p_fun(mpc_p_fun)
 
-    # Constraints
-    lb_x=0*np.ones((CSTR.nx,1))
-    ub_x=4*np.ones((CSTR.nx,1))
     # state constraints
     lb_cA=0
     ub_cA=4
@@ -90,17 +87,6 @@ def get_MPC(t_step: float, CSTR: CSTRmodel.CSTR_Cascade, n_robust: int, n_scenar
     lb_Tr=20
     ub_Tr=80
 
-
-    lb_x[:CSTR.n_reac]=lb_cA
-    ub_x[:CSTR.n_reac]=ub_cA
-    lb_x[CSTR.n_reac:2*CSTR.n_reac]=lb_cB
-    ub_x[CSTR.n_reac:2*CSTR.n_reac]=ub_cB
-    lb_x[2*CSTR.n_reac:3*CSTR.n_reac]=lb_cR
-    ub_x[2*CSTR.n_reac:3*CSTR.n_reac]=ub_cR
-    lb_x[3*CSTR.n_reac:4*CSTR.n_reac]=lb_cS
-    ub_x[3*CSTR.n_reac:4*CSTR.n_reac]=ub_cS
-    lb_x[4*CSTR.n_reac:]=lb_Tr
-    ub_x[4*CSTR.n_reac:]=ub_Tr
     # input constraints
     lb_uA = 0
     ub_uA = 1.5
@@ -179,10 +165,6 @@ def get_MPC(t_step: float, CSTR: CSTRmodel.CSTR_Cascade, n_robust: int, n_scenar
     mpc.scaling['_u', 'uB'] = 1.5
 
     mpc.setup()
-    x_0=0*np.ones((CSTR.nx,1))
-    x_0[-CSTR.n_reac:]=CSTR.Tr_in
-    mpc.x0 = x_0
-    mpc.set_initial_guess()
 
     return mpc, mpc_tvp_template, mpc_p_template
 

@@ -46,19 +46,21 @@ def get_simulator(t_step: float, CSTR: CSTRmodel.CSTR_Cascade) -> do_mpc.simulat
     return simulator, sim_tvp_template, sim_p_template
 
 # %%
-def get_MPC(t_step: float, CSTR: CSTRmodel.CSTR_Cascade, n_robust: int, n_scenarios: int) -> Tuple[do_mpc.controller.MPC, Any]:
+def get_MPC(t_step: float, CSTR: CSTRmodel.CSTR_Cascade, n_robust: int, n_scenarios: int, **kwargs) -> Tuple[do_mpc.controller.MPC, Any]:
     mpc = do_mpc.controller.MPC(CSTR.model)
 
     setup_mpc = {
         'n_horizon': 35,
         't_step': t_step,   
-        'store_full_solution': True,
+        'store_full_solution': False,
         'collocation_deg': 4,
         'collocation_ni':1,
         'n_robust':n_robust,
         # Use MA27 linear solver in ipopt for faster calculations:
         'nlpsol_opts': {'ipopt.linear_solver': 'mumps'}
     }
+    setup_mpc.update(kwargs)
+
     mpc.set_param(**setup_mpc)
 
     surpress_ipopt = {'ipopt.print_level':0, 'ipopt.sb': 'yes', 'print_time':0}
@@ -75,85 +77,33 @@ def get_MPC(t_step: float, CSTR: CSTRmodel.CSTR_Cascade, n_robust: int, n_scenar
         return mpc_p_template
     mpc.set_p_fun(mpc_p_fun)
 
-    # state constraints
-    lb_cA=0
-    ub_cA=4
-    lb_cB=0
-    ub_cB=4
-    lb_cR=0
-    ub_cR=4
-    lb_cS=0
-    ub_cS=0.12
-    lb_Tr=20
-    ub_Tr=80
-
-    # input constraints
-    lb_uA = 0
-    ub_uA = 1.5
-    lb_uB = 0
-    ub_uB = 1.5
-    lb_Tj = 20
-    ub_Tj = 80
-    lb_u=0*np.ones((CSTR.nu,1))
-    ub_u=np.inf*np.ones((CSTR.nu,1))
-    lb_u[:CSTR.n_reac]=lb_uA
-    ub_u[:CSTR.n_reac]=ub_uA
-    lb_u[CSTR.n_reac:2*CSTR.n_reac]=lb_uB
-    ub_u[CSTR.n_reac:2*CSTR.n_reac]=ub_uB
-    lb_u[2*CSTR.n_reac:]=lb_Tj
-    ub_u[2*CSTR.n_reac:]=ub_Tj
-
-
-    QS = 0.5
-    QS = QS*np.diag(np.ones(CSTR.n_reac))
-    QS[-1,-1]*CSTR.n_reac
-    QA = 0
-    QA = QA*np.diag(np.ones(CSTR.n_reac))
-    #QA[-1,-1]CSTR.n_reac
-    QB = 0
-    QB = QB*np.diag(np.ones(CSTR.n_reac))
-    #QB[-1,-1]CSTR.n_reac
-    QR = 1
-    QR = QR*np.diag(np.ones(CSTR.n_reac))
-    QR[-1,-1]*CSTR.n_reac
-    #print(Q)
-    R_c = 0.001
-    R_c = R_c*np.diag(np.ones(CSTR.nu))
-    for i in range(CSTR.n_reac):
-        R_c[-i,-i]=R_c[-i,-i]/(60**2/(1.5**2))
-
     lterm = 0 
-    lterm += CSTR.model.x['cS'].T@QS@CSTR.model.x['cS']+CSTR.model.x['cA'].T@QA@CSTR.model.x['cA']+CSTR.model.x['cB'].T@QB@CSTR.model.x['cB']+(CSTR.model.x['cR']-1.5).T@QR@(CSTR.model.x['cR']-1.5)
-    lterm +=(sum1(CSTR.model.u['uA'])-ub_u[0])@(sum1(CSTR.model.u['uA'])-ub_u[0])
-    lterm +=(sum1(CSTR.model.u['uB'])-ub_u[CSTR.n_reac])@(sum1(CSTR.model.u['uB'])-ub_u[CSTR.n_reac])
-    lterm +=(0.0001/(ub_Tj-lb_Tj)**2)*(CSTR.model.u['Tj']-lb_Tj).T@(CSTR.model.u['Tj']-lb_Tj)
+    lterm += -sum1(CSTR.model.x['cR',-1])
+    mterm = lterm
 
-    mterm = DM.zeros((1,1))
     mpc.set_objective(lterm=lterm, mterm=mterm)
-    mpc.set_rterm(uA=0.001)
-    mpc.set_rterm(uB=0.001)
-    mpc.set_rterm(Tj=0.001/(60**2/(1.5**2)))
+    mpc.set_rterm(uA=1e-3)
+    mpc.set_rterm(uB=1e-3)
+    mpc.set_rterm(Tj=1e-6)
 
-    mpc.bounds['lower','_u','uA'] = lb_uA
-    mpc.bounds['lower','_u','uB'] = lb_uB
-    mpc.bounds['lower','_u','Tj'] = lb_Tj
-    mpc.bounds['upper','_u','uA'] = ub_uA
-    mpc.bounds['upper','_u','uB'] = ub_uB
-    mpc.bounds['upper','_u','Tj'] = ub_Tj
+    mpc.bounds['lower','_u','uA'] = 0
+    mpc.bounds['lower','_u','uB'] = 0
+    mpc.bounds['lower','_u','Tj'] = 20
+    mpc.bounds['upper','_u','Tj'] = 80
 
-    mpc.bounds['lower','_x','cA']=lb_cA
-    mpc.bounds['lower','_x','cB']=lb_cB
-    mpc.bounds['lower','_x','cR']=lb_cR
-    mpc.bounds['lower','_x','cS']=lb_cS
-    mpc.bounds['lower','_x','Tr']=lb_Tr
-    mpc.bounds['upper','_x','cA']=ub_cA
-    mpc.bounds['upper','_x','cB']=ub_cB
-    mpc.bounds['upper','_x','cR']=ub_cR
-    mpc.bounds['upper','_x','cS']=ub_cS
-    mpc.bounds['upper','_x','Tr']=ub_Tr
+    mpc.bounds['lower','_x','cA']= 0
+    mpc.bounds['lower','_x','cB']= 0
+    mpc.bounds['lower','_x','cR']= 0
+    mpc.bounds['lower','_x','cS']= 0 
+    mpc.bounds['lower','_x','Tr']= 20
+    mpc.bounds['upper','_x','cA']= 1.5
+    mpc.bounds['upper','_x','cB']= 1.5
+    mpc.bounds['upper','_x','cR']= 1.5
+    mpc.bounds['upper','_x','cS']= .12
+    mpc.bounds['upper','_x','Tr']= 80
 
-    mpc.set_nl_cons('u_A',sum1(CSTR.model.u['uA']),ub=ub_uA,soft_constraint=False)
-    mpc.set_nl_cons('u_B',sum1(CSTR.model.u['uB']),ub=ub_uB,soft_constraint=False)
+    mpc.set_nl_cons('u_A',sum1(CSTR.model.u['uA']),ub=1.5, soft_constraint=False)
+    mpc.set_nl_cons('u_B',sum1(CSTR.model.u['uB']),ub=1.5, soft_constraint=False)
 
     mpc.scaling['_x', 'cA'] = 1.5
     mpc.scaling['_x', 'cB'] = 1.5
@@ -169,7 +119,7 @@ def get_MPC(t_step: float, CSTR: CSTRmodel.CSTR_Cascade, n_robust: int, n_scenar
     return mpc, mpc_tvp_template, mpc_p_template
 
 # %% LQR
-def template_lqr(model,t_sample):
+def get_lqr(model,t_sample):
     """
     --------------------------------------------------------------------------
     template_lqr: tuning parameters
@@ -198,3 +148,20 @@ def template_lqr(model,t_sample):
     return lqr
 
 # %%
+def run_closed_loop(controller, simulator, n_steps):
+    """
+    Run a closed-loop simulation with controller and simulator.
+
+    It is necessary to previously set the ``x0`` of the simulator
+
+    Parameters
+    ---------- 
+    controller : do_mpc.controller.MPC or do_mpc.controller.LQR
+    simulator : do_mpc.simulator.Simulator
+    n_steps : int
+        Number of steps to simulate.
+    """
+    x0 = simulator.x0
+    for k in range(n_steps):
+        u0 = controller.make_step(x0)
+        x0 = DM(simulator.make_step(u0))

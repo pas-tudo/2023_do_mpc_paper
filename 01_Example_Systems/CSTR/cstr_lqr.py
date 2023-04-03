@@ -19,49 +19,61 @@
 #
 #   You should have received a copy of the GNU General Public License
 #   along with do-mpc.  If not, see <http://www.gnu.org/licenses/>.
-
 import numpy as np
 from casadi import *
 from casadi.tools import *
-import pdb
-import sys
-import os
-rel_do_mpc_path = os.path.join('..','..')
-sys.path.append(rel_do_mpc_path)
 import do_mpc
+import pdb
 
-
-def get_simulator(model):
+def get_lqr(model, xss, uss):
     """
     --------------------------------------------------------------------------
-    template_optimizer: tuning parameters
+    template_lqr: tuning parameters
     --------------------------------------------------------------------------
     """
-    simulator = do_mpc.simulator.Simulator(model)
+    t_sample = 0.005
+    model_dc = model.discretize(t_sample)
+    
+    # Initialize the controller
+    lqr = do_mpc.controller.LQR(model_dc)
+    
+    # Initialize parameters
+    setup_lqr = {'n_horizon':None, 't_step': t_sample}
+    lqr.set_param(**setup_lqr)
 
-    params_simulator = {
-        'integration_tool': 'cvodes',
-        'abstol': 1e-10,
-        'reltol': 1e-10,
-        't_step': 0.005
-    }
+    
+    # Set objective
+    Q = np.diag(np.array([1,1,.1,.1]))
+    R = np.diag(np.array([1e-3, 1e-5]))
+    Rdelu = np.diag(np.array([1e-2, 1e-4]))
+    
+    lqr.set_objective(Q=Q, R=R)
+    # lqr.set_rterm(delR = Rdelu)
+    
+    lqr.setup()
 
-    simulator.set_param(**params_simulator)
+    lqr.set_setpoint(xss, uss)
+    return lqr
 
-    tvp_num = simulator.get_tvp_template()
-    def tvp_fun(t_now):
-        return tvp_num
 
-    simulator.set_tvp_fun(tvp_fun)
+class Clipper:
+    def __init__(self, model):
+        self.lb_u = model._u(-np.inf)
+        self.ub_u = model._u(np.inf)
 
-    p_num = simulator.get_p_template()
-    p_num['alpha'] = 1.0
-    p_num['beta'] = 1.0
-    def p_fun(t_now):
-        return p_num
+    def __call__(self, u):
+        u_clipped = np.clip(u, self.lb_u.cat.full(), self.ub_u.cat.full())
+        return u_clipped
 
-    simulator.set_p_fun(p_fun)
 
-    simulator.setup()
+def get_clipper(model):
+    clipper = Clipper(model)
 
-    return simulator
+    clipper.lb_u['F'] = 5.0
+    clipper.ub_u['F'] = 100
+    clipper.lb_u['Q_dot'] = -8500
+    clipper.ub_u['Q_dot'] = 0
+
+    return clipper
+
+    

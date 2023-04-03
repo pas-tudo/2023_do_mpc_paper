@@ -61,10 +61,9 @@ def get_mpc(model):
     mpc.scaling['_u', 'Q_dot'] = 2000
     mpc.scaling['_u', 'F'] = 100
 
-    _x = model.x
 
-    mterm = (_x['C_b'] - 0.6)**2
-    lterm = (_x['C_b'] - 0.6)**2
+    mterm = (model._x['C_b'] - model.tvp['C_b_set'])**2 
+    lterm = (model._x['C_b'] - model.tvp['C_b_set'])**2 
 
     mpc.set_objective(mterm=mterm, lterm=lterm)
 
@@ -88,7 +87,15 @@ def get_mpc(model):
     # Instead of having a regular bound on T_R:
     #mpc.bounds['upper', '_x', 'T_R'] = 140
     # We can also have soft consraints as part of the set_nl_cons method:
-    mpc.set_nl_cons('T_R', _x['T_R'], ub=135, soft_constraint=True, penalty_term_cons=1e2)
+    mpc.set_nl_cons('T_R', model._x['T_R'], ub=135, soft_constraint=True, penalty_term_cons=1e2)
+
+    mpc_tvp_template = mpc.get_tvp_template()
+    mpc_tvp_template['_tvp', :, 'C_b_set'] = 0.6
+
+    def tvp_fun(t_now):
+        return mpc_tvp_template
+
+    mpc.set_tvp_fun(tvp_fun)
 
 
     alpha_var = np.array([1., 1.05, 0.95])
@@ -98,4 +105,4 @@ def get_mpc(model):
 
     mpc.setup()
 
-    return mpc
+    return mpc, mpc_tvp_template

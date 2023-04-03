@@ -67,6 +67,9 @@ def get_model():
     T_R = model.set_variable(var_type='_x', var_name='T_R', shape=(1,1))
     T_K = model.set_variable(var_type='_x', var_name='T_K', shape=(1,1))
 
+    # TVP
+    C_b_set = model.set_variable(var_type='_tvp', var_name='C_b_set', shape=(1,1))
+
     # Input struct (optimization variables):
     F = model.set_variable(var_type='_u', var_name='F')
     Q_dot = model.set_variable(var_type='_u', var_name='Q_dot')
@@ -96,3 +99,81 @@ def get_model():
 
 
     return model
+
+def get_steady_state(model, C_b_set):
+    """ Get the steady state of the model for a given C_b_setpoint. 
+    
+    Parameters
+    ----------
+    model : do_mpc.model.Model
+        An instance of the do_mpc.model.Model class representing the CSTR
+    C_b_set : float
+        The setpoint for the concentration of B in the reactor.
+
+
+    """
+    
+    opt_x = struct_symSX([
+        entry('_x', sym=model._x),
+        entry('_u', sym=model._u),
+    ])
+    opt_p = struct_symSX([
+        entry('_tvp', sym=model._tvp),
+        entry('_p', sym=model._p),
+    ])
+
+    f = (opt_x['_x', 'C_b'] - opt_p['_tvp', 'C_b_set'])**2
+
+    nlp = {'x':opt_x, 'p': opt_p, 'f': f, 'g':model._rhs}
+
+    S = nlpsol('S', 'ipopt', nlp)
+
+    p_num = opt_p(0)
+    p_num['_tvp', 'C_b_set'] = 0.6
+    p_num['_p', 'alpha'] = 1.0
+    p_num['_p', 'beta'] = 1.0
+
+    lb_x = opt_x(0)
+    lb_x['_x', 'C_a'] = 0.1
+    lb_x['_x', 'C_b'] = 0.1
+    lb_x['_x', 'T_R'] = 50
+    lb_x['_x', 'T_K'] = 50
+    lb_x['_u', 'F'] = 5
+    lb_x['_u', 'Q_dot'] = -8500
+
+    ub_x = opt_x(0)
+    ub_x['_x', 'C_a'] = 2
+    ub_x['_x', 'C_b'] = 2
+    ub_x['_x', 'T_R'] = 140
+    ub_x['_x', 'T_K'] = 140
+    ub_x['_u', 'F'] = 100
+    ub_x['_u', 'Q_dot'] = 0
+
+    x0 = lb_x.cat + 0.5*(ub_x.cat-lb_x.cat)
+
+    r = S(lbg=0, ubg=0, p=p_num, lbx=lb_x, ubx=ub_x, x0=x0)
+
+    opt_x_num = opt_x(r['x'])
+
+    x_ss = opt_x_num['_x'].full()
+    u_ss = opt_x_num['_u'].full()
+
+    return x_ss, u_ss, p_num
+
+def get_linear_model(C_b_set = 0.6):
+    model = get_model()
+    x_ss, u_ss, p_num = get_steady_state(model, C_b_set=C_b_set)
+
+    linear_model = do_mpc.model.linearize(
+        model = model,
+        xss=x_ss,
+        uss=u_ss,
+        p0=p_num['_p'],
+        tvp0=p_num['_tvp'],
+    )
+
+    return linear_model, x_ss, u_ss
+
+
+if __name__ == '__main__':
+    linear_model, x_ss, u_ss = get_linear_model()

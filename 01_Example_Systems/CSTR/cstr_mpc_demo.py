@@ -46,7 +46,7 @@ store_results = False
 
 
 model = cstr_model.get_model()
-mpc = cstr_mpc.get_mpc(model)
+mpc, mpc_tvp_template  = cstr_mpc.get_mpc(model)
 simulator = cstr_simulator.get_simulator(model)
 
 # Set the initial state of mpc and simulator:
@@ -68,6 +68,7 @@ fig, ax = plt.subplots(5, sharex=True)
 # Configure plot:
 graphics.add_line(var_type='_x', var_name='C_a', axis=ax[0])
 graphics.add_line(var_type='_x', var_name='C_b', axis=ax[0])
+graphics.add_line(var_type='_tvp', var_name='C_b_set', axis=ax[0])
 graphics.add_line(var_type='_x', var_name='T_R', axis=ax[1])
 graphics.add_line(var_type='_x', var_name='T_K', axis=ax[1])
 graphics.add_line(var_type='_aux', var_name='T_dif', axis=ax[2])
@@ -91,7 +92,6 @@ ax[1].legend(label_lines, ['T_R', 'T_K'])
 fig.align_ylabels()
 fig.tight_layout()
 plt.ion()
-
 
 for k in range(50):
     u0 = mpc.make_step(x0)

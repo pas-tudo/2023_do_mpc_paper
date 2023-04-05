@@ -27,17 +27,18 @@ from casadi.tools import *
 import pdb
 import sys
 import os
+import json
 rel_do_mpc_path = os.path.join('..','..')
 sys.path.append(rel_do_mpc_path)
 import do_mpc
-from do_mpc.tools import Timer
+
 
 import matplotlib.pyplot as plt
 import pickle
 import time
 
 import cstr_model
-import cstr_mpc
+import cstr_controller
 import cstr_simulator
 
 """ User settings: """
@@ -46,7 +47,8 @@ store_results = False
 
 
 model = cstr_model.get_model()
-mpc, mpc_tvp_template  = cstr_mpc.get_mpc(model)
+bound_dict = json.load(open(os.path.join('config','cstr_bounds.json')))
+mpc, mpc_tvp_template  = cstr_controller.get_mpc(model, bound_dict)
 simulator = cstr_simulator.get_simulator(model)
 
 # Set the initial state of mpc and simulator:
@@ -93,16 +95,19 @@ fig.align_ylabels()
 fig.tight_layout()
 plt.ion()
 
-for k in range(50):
+def update_plot_callback(k):
+    graphics.plot_results(t_ind=k)
+    graphics.plot_predictions(t_ind=k)
+    graphics.reset_axes()
+    plt.show()
+    plt.pause(0.01)
+
+# Main loop
+
+for k in range(100):
     u0 = mpc.make_step(x0)
     x0 = simulator.make_step(u0)
-
     if show_animation:
-        graphics.plot_results(t_ind=k)
-        graphics.plot_predictions(t_ind=k)
-        graphics.reset_axes()
-        plt.show()
-        plt.pause(0.01)
-
+        update_plot_callback(k)
 
 input('Press any key to exit.')

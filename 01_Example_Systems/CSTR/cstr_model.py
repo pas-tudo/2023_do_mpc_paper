@@ -126,10 +126,10 @@ def get_steady_state(model, C_b_set):
 
     nlp = {'x':opt_x, 'p': opt_p, 'f': f, 'g':model._rhs}
 
-    S = nlpsol('S', 'ipopt', nlp)
+    S = nlpsol('S', 'ipopt', nlp, {'ipopt.print_level':0 , 'ipopt.sb': 'yes', 'print_time':0})
 
     p_num = opt_p(0)
-    p_num['_tvp', 'C_b_set'] = 0.6
+    p_num['_tvp', 'C_b_set'] = C_b_set
     p_num['_p', 'alpha'] = 1.0
     p_num['_p', 'beta'] = 1.0
 
@@ -152,6 +152,11 @@ def get_steady_state(model, C_b_set):
     x0 = lb_x.cat + 0.5*(ub_x.cat-lb_x.cat)
 
     r = S(lbg=0, ubg=0, p=p_num, lbx=lb_x, ubx=ub_x, x0=x0)
+
+    solver_stats = S.stats()
+
+    if not solver_stats['success']:
+        print('Solver failed to find a solution. Steady-state might not exist.')
 
     opt_x_num = opt_x(r['x'])
 

@@ -27,17 +27,17 @@ from casadi.tools import *
 import pdb
 import sys
 import os
+import json
 rel_do_mpc_path = os.path.join('..','..')
 sys.path.append(rel_do_mpc_path)
 import do_mpc
-from do_mpc.tools import Timer
 
 import matplotlib.pyplot as plt
 import pickle
 import time
 
 import cstr_model
-import cstr_lqr
+import cstr_controller
 import cstr_simulator
 
 """ User settings: """
@@ -47,11 +47,12 @@ store_results = False
 
 model = cstr_model.get_model()
 linear_model, xss, uss = cstr_model.get_linear_model()
-lqr = cstr_lqr.get_lqr(linear_model, xss, uss)
+lqr = cstr_controller.get_lqr(linear_model, xss, uss)
 simulator = cstr_simulator.get_simulator(model)
-lqr_clipper = cstr_lqr.get_clipper(linear_model)
+# Load json file with bounds
+bound_dict = json.load(open(os.path.join('config','cstr_bounds.json')))
+lqr_clipper = cstr_controller.get_clipper(linear_model, bound_dict)
 
-# Set the initial state of mpc and simulator:
 C_a_0 = 0.8 # This is the initial concentration inside the tank [mol/l]
 C_b_0 = 0.5 # This is the controlled variable [mol/l]
 T_R_0 = 134.14 #[C]
@@ -60,10 +61,10 @@ x0 = np.array([C_a_0, C_b_0, T_R_0, T_K_0]).reshape(-1,1)
 
 lqr.x0 = x0
 simulator.x0 = x0
+u0 = np.zeros((2,1))
 
-for k in range(50):
+for k in range(100):
     u0 = lqr.make_step(x0)
-    u0 = lqr_clipper(u0)
     x0 = simulator.make_step(u0)
 
 fig, ax, graphics = do_mpc.graphics.default_plot(simulator.data)

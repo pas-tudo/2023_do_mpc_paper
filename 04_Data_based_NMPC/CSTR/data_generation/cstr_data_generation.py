@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import pandas as pd
 
-from IPython.display import clear_output
 import pandas as pd
 import time as time
 import importlib
@@ -50,6 +49,8 @@ IS_INTERACTIVE = hasattr(sys, 'ps1')
 # %% [code]
 
 bound_dict = json.load(open(os.path.join(example_path, 'config','cstr_bounds.json')))
+u_lb = np.array((bound_dict['inputs']['lower']['F'], bound_dict['inputs']['lower']['Q_dot'])).reshape(-1,1)
+u_ub = np.array((bound_dict['inputs']['upper']['F'], bound_dict['inputs']['upper']['Q_dot'])).reshape(-1,1)
 
 if __name__ ==  '__main__' :
     sp = do_mpc.sampling.SamplingPlanner(overwrite=True)
@@ -70,10 +71,12 @@ if __name__ ==  '__main__' :
     sp.set_sampling_var('T_R_0',   get_random_uniform_func('states', 'T_R'))
     sp.set_sampling_var('T_K_0',   get_random_uniform_func('states', 'T_K'))
     sp.set_sampling_var('C_b_set', get_random_uniform_func('states', 'C_b'))
+    sp.set_sampling_var('random_contribution', np.random.rand)
 
-    plan = sp.gen_sampling_plan(10)
+    plan = sp.gen_sampling_plan(200)
     sp.export(os.path.join(data_dir, 'sampling_plan_lqr'))
-    print(pd.DataFrame(plan))
+
+
 
 
 # %% [markdown]
@@ -92,9 +95,10 @@ if __name__ ==  '__main__' :
 model = cstr_model.get_model()
 simulator = cstr_simulator.get_simulator(model)
 lqr_clipper = cstr_controller.get_clipper(model, bound_dict)
+random_input = cstr_controller.UniformRandomInput(bound_dict)
 
 def sampling_function(
-        C_a_0, C_b_0, T_R_0, T_K_0, C_b_set
+        C_a_0, C_b_0, T_R_0, T_K_0, C_b_set, random_contribution
     ):
     x0 = np.array([C_a_0, C_b_0, T_R_0, T_K_0]).reshape(-1,1)
 
@@ -107,7 +111,7 @@ def sampling_function(
     lqr.x0 = x0
 
     for k in range(20):
-        u0 = lqr.make_step(x0)
+        u0 = (1-random_contribution)*lqr.make_step(x0) + random_contribution*random_input.make_step(x0)
         u0 = lqr_clipper(u0) 
         x0 = simulator.make_step(u0)
 
@@ -147,17 +151,15 @@ if __name__ == '__main__':
     dh = do_mpc.sampling.DataHandler(plan)
     dh.data_dir = sampler.data_dir
 
-
-
     fig, ax = plt.subplots(6,1, sharex=True)
 
     for data_i in dh[:]:
-        ax[0].plot(data_i['res']['_time'], data_i['res']['_x','C_a'], color='k', alpha=.5, linewidth=1)
-        ax[1].plot(data_i['res']['_time'], data_i['res']['_x','C_b'], color='k', alpha=.5, linewidth=1)
-        ax[2].plot(data_i['res']['_time'], data_i['res']['_x','T_R'], color='k', alpha=.5, linewidth=1)
-        ax[3].plot(data_i['res']['_time'], data_i['res']['_x','T_K'], color='k', alpha=.5, linewidth=1)
-        ax[4].plot(data_i['res']['_time'], data_i['res']['_u','F'], color='k', alpha=.5, linewidth=1)
-        ax[5].plot(data_i['res']['_time'], data_i['res']['_u','Q_dot'], color='k', alpha=.5, linewidth=1)
+        ax[0].plot(data_i['res']['_time'], data_i['res']['_x','C_a'], color='k', alpha=.1, linewidth=1)
+        ax[1].plot(data_i['res']['_time'], data_i['res']['_x','C_b'], color='k', alpha=.1, linewidth=1)
+        ax[2].plot(data_i['res']['_time'], data_i['res']['_x','T_R'], color='k', alpha=.1, linewidth=1)
+        ax[3].plot(data_i['res']['_time'], data_i['res']['_x','T_K'], color='k', alpha=.1, linewidth=1)
+        ax[4].step(data_i['res']['_time'], data_i['res']['_u','F'], color='k', alpha=.1, linewidth=1, where='post')
+        ax[5].step(data_i['res']['_time'], data_i['res']['_u','Q_dot'], color='k', alpha=.1, linewidth=1, where='post')
 
     ax[0].set_ylabel('C_a')
     ax[1].set_ylabel('C_b')

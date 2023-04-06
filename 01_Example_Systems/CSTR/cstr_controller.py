@@ -32,22 +32,6 @@ import do_mpc
 import json
 from typing import Union, Optional, List, Callable
 
-# class ClosedLoop:
-#     def __init__(self, 
-#             controller: Union[do_mpc.controller.LQR, do_mpc.controller.MPC], 
-#             simulator: do_mpc.simulator.Simulator, 
-#             callbacks: List[Callable[[int], None]]=[],
-#         ) -> None:
-#         self.controller = controller
-#         self.simulator = simulator
-#         self.callbacks = callbacks
-
-#     def run(self, x0, n_iterations) -> None:
-#         for i in range(n_iterations):
-#             u0 =  self.controller.make_step(x0)
-#             x0 = self.simulator.make_step(u0)
-#             for callback in self.callbacks:
-#                 callback(i)
 
 def get_mpc(model, bound_dict):
     """
@@ -175,3 +159,29 @@ def get_clipper(model, bound_dict):
 
     return clipper
 
+class UniformRandomInput:
+    """Generate random input signals.
+    This class generates random input signals with values uniformly distributed between ``u_lb`` and ``u_ub``
+    """
+
+    def __init__(self, 
+        bound_dict,
+        switch_prob: Optional[float] = 0.5, 
+    ):
+        
+        u_lb = np.array([val for val in bound_dict['inputs']['lower'].values()]).reshape(-1,1)
+        u_ub = np.array([val for val in bound_dict['inputs']['upper'].values()]).reshape(-1,1)
+
+        n_u = u_lb.shape[0]
+
+        self.n_u = n_u
+        self.switch_prob = switch_prob
+        self.u_lb = u_lb
+        self.u_ub = u_ub
+        self.u = np.random.uniform(self.u_lb, self.u_ub)
+
+    def make_step(self, x: Optional[np.ndarray] = None) -> np.ndarray:
+        u_candidate = np.random.uniform(self.u_lb, self.u_ub)
+        switch = np.random.rand(self.n_u, 1) >= (1-self.switch_prob) # switching? 0 or 1.
+        self.u = (1-switch)*self.u + switch*u_candidate # Old or new value.
+        return self.u

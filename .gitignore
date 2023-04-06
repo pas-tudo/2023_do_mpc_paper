@@ -129,3 +129,9 @@ dmypy.json
 .pyre/
 
 00_Plotting/export/
+
+04_Data_based_NMPC/CSTR/data_generation/closed_loop_lqr/
+
+04_Data_based_NMPC/CSTR/data_generation/cstr_data_lqr.pkl
+
+*.onnx

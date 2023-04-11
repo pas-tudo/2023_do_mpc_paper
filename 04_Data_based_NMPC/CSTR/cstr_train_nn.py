@@ -32,55 +32,25 @@ def train_test_split(data, test_fraction=0.2, **kwargs):
 
     return data_train, data_test
 
-class Scaler:
-    def __init__(self, data):
-        self.mean = data.mean()
-        self.std = data.std()
-
-    def transform(self, data, idx = None):
-        if idx is None:
-            mean = self.mean
-            std = self.std
-        else:
-            mean = self.mean[idx]
-            std = self.std[idx]
-
-        return (data - mean) / std
-
-    def inverse_transform(self, data, idx = None):
-        if idx is None:
-            mean = self.mean
-            std = self.std
-        else:
-            mean = self.mean[idx]
-            std = self.std[idx]
-
-        if isinstance(data, pd.DataFrame):
-            pass
-        else:
-            mean = mean.to_numpy().reshape(1,-1)
-            std = std.to_numpy().reshape(1,-1)
-
-        return data * std + mean
-
 # Train test split
 data_train, data_test = train_test_split(data, test_fraction=0.2, random_state=42)
-
-# Scaling
-scaler = Scaler(data_train)
-data_train_scaled = scaler.transform(data_train)
-
-# Visualization of scaled train data in histogramm
-_ = data_train_scaled[['x_k', 'u_k']].hist(sharex=True, sharey=True)
-
 # %%
 
 def get_model(data):
-
     # Model input
     x_k_tf = keras.Input(shape=(data['x_k'].shape[1]), name='x_k')
     u_k_tf = keras.Input(shape=(data['u_k'].shape[1]), name='u_k')
+
+    # Normalization layers
+    scale_inputs = keras.layers.Normalization(name='input_scaled')
+    scale_inputs.adapt(data[['x_k', 'u_k']].to_numpy())
+    scale_outputs = keras.layers.Normalization(name='x_next_scaled')
+    scale_outputs.adapt(data['x_next'].to_numpy())
+    unscale_outputs = keras.layers.Normalization(invert=True, name='x_next')
+    unscale_outputs.adapt(data['x_next'].to_numpy())
+
     layer_in  = keras.layers.concatenate([x_k_tf, u_k_tf])
+    layer_in = scale_inputs(layer_in)
 
     # Hidden layers
     for k in range(4):
@@ -90,19 +60,19 @@ def get_model(data):
         )(layer_in)
 
     # Output layer
-    dx_next_tf= keras.layers.Dense(data['x_next'].shape[1], name='dx_next_norm')(layer_in)
+    x_next_tf_scaled = keras.layers.Dense(data['x_next'].shape[1], name='x_next_norm')(layer_in)
 
-    x_next_tf = keras.layers.Add(name='x_next_norm')([x_k_tf, dx_next_tf])
+    x_next_tf = unscale_outputs(x_next_tf_scaled)
 
     # Create model
     eval_model = keras.Model(inputs=[x_k_tf, u_k_tf], outputs=x_next_tf)
-    train_model = keras.Model(inputs=[x_k_tf, u_k_tf], outputs=x_next_tf)
+    train_model = keras.Model(inputs=[x_k_tf, u_k_tf], outputs=x_next_tf_scaled)
 
-    return train_model, eval_model
+    return train_model, eval_model, scale_outputs
 
 
 # %%
-train_model, eval_model = get_model(data_train)
+train_model, eval_model, scale_outputs = get_model(data_train)
 
 
 # Prepare model for training
@@ -117,20 +87,16 @@ train_model.summary()
 # %%
 # Fit model
 history = train_model.fit(
-    x=[data_train_scaled['x_k'], data_train_scaled['u_k']],
-    y=[data_train_scaled['x_next']],
-    epochs=1000,
+    x=[data_train['x_k'], data_train['u_k']],
+    y=[scale_outputs(data_train['x_next'])],
+    epochs=500,
     batch_size=512,
 )
 
 # %%
 
-def plot_parity(data, scaler, ax, **kwargs):
-    data_scaled = scaler.transform(data)
-
-    x_next_pred_scaled = eval_model.predict([data_scaled['x_k'], data_scaled['u_k']])
-    print(x_next_pred_scaled.shape)
-    x_next_pred = scaler.inverse_transform(x_next_pred_scaled, idx='x_next')
+def plot_parity(data, ax, **kwargs):
+    x_next_pred = eval_model.predict([data['x_k'], data['u_k']])
     x_next_true = data['x_next'].to_numpy()
     for k in range(4):
         i,j = k//2, k%2
@@ -139,8 +105,8 @@ def plot_parity(data, scaler, ax, **kwargs):
 
 # Parity plot for all outputs
 fig, ax = plt.subplots(2,2)
-plot_parity(data_test, scaler,   ax, alpha=0.5, marker='x', linestyle='None')
-plot_parity(data_train, scaler,  ax, alpha=0.5, marker='x', linestyle='None')
+plot_parity(data_test, ax, alpha=0.5, marker='x', linestyle='None')
+plot_parity(data_train,ax, alpha=0.5, marker='x', linestyle='None')
 
 # %% [markdown]
 """
@@ -177,18 +143,15 @@ onnx_model, _ = tf2onnx.convert.from_keras(eval_model,
 casadi_converter = do_mpc.sysid.ONNXConversion(onnx_model)
 casadi_converter
 
+# %%
+
 
 x = SX.sym('x', 4)
 u = SX.sym('u', 2)
 
-x_scaled = scaler.transform(x, idx='x_k')
-u_scaled = scaler.transform(u, idx='u_k')
+casadi_converter.convert(x_k = x.T, u_k = u.T)
 
-casadi_converter.convert(x_k = x_scaled.T, u_k = u_scaled.T)
-
-x_next_scaled = casadi_converter['x_next_norm']
-x_next = scaler.inverse_transform(x_next_scaled, idx='x_next')
-
+x_next = casadi_converter['x_next']
 cas_function = Function('x_next_fun', [x, u], [x_next])
 
 # %% [markdown]
@@ -198,23 +161,37 @@ cas_function = Function('x_next_fun', [x, u], [x_next])
 """
 
 # %%
-x_open_loop = np.zeros(data['x_k'].shape)
 
-x_open_loop[0] = data['x_k'].iloc[0]
+data_dir = os.path.join('.', 'data_generation', 'closed_loop_lqr')
 
-for k, u_k in enumerate(data['u_k'][:-1].to_numpy()):
+plan = do_mpc.tools.load_pickle(os.path.join(data_dir, 'sampling_plan_lqr.pkl'))
+
+dh = do_mpc.sampling.DataHandler(plan)
+dh.data_dir = os.path.join(data_dir, '')
+
+idx = 5
+
+res = dh[idx][0]['res']
+
+x_open_loop = np.zeros(res['_x'].shape)
+x_open_loop[0] = res['_x'][0]
+
+for k, u_k in enumerate(res['_u'][:-1]):
     x_next = cas_function(x_open_loop[k], u_k)
     x_open_loop[k+1] = x_next
 
 # Plot the results
-fig, ax = plt.subplots(3,2, sharex=True)
+fig, ax = plt.subplots(3,2, sharex=True, figsize=(10,10))
 
 for k in range(4):
     i,j = k//2, k%2
-    ax[i,j].plot(data['x_next'].to_numpy()[:,k], label='True', alpha=0.5)
-    ax[i,j].plot(x_open_loop[:,k], label='Open loop', alpha=0.5)
+    ax[i,j].plot(res['_x'][:,k], label='True', alpha=0.3, linewidth=5)
+    ax[i,j].set_prop_cycle(None)
+    ax[i,j].plot(x_open_loop[:,k], label='Open loop', alpha=1)
 
-ax[-1,0].plot(data['u_k'].to_numpy()[:,0], label='u_1', alpha=0.5)
-ax[-1,1].plot(data['u_k'].to_numpy()[:,1], label='u_2', alpha=0.5)
+ax[-1,0].plot(res['_u'][:,0], label='u_1', alpha=0.5)
+ax[-1,1].plot(res['_u'][:,1], label='u_2', alpha=0.5)
 
-ax[0,0].set_xlim(0, 100)
+ax[0,0].set_xlim(0, 500)
+
+# %%

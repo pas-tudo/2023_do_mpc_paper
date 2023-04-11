@@ -25,7 +25,7 @@ from casadi import *
 from casadi.tools import *
 
 # CSTR files
-example_path = os.path.join('..','..','01_Example_Systems','CSTR')
+example_path = os.path.join('..','..','..','01_Example_Systems','CSTR')
 sys.path.append(example_path)
 import cstr_model
 import cstr_controller
@@ -52,18 +52,20 @@ bound_dict = json.load(open(os.path.join(example_path, 'config','cstr_bounds.jso
 u_lb = np.array((bound_dict['inputs']['lower']['F'], bound_dict['inputs']['lower']['Q_dot'])).reshape(-1,1)
 u_ub = np.array((bound_dict['inputs']['upper']['F'], bound_dict['inputs']['upper']['Q_dot'])).reshape(-1,1)
 
+def get_random_uniform_func(var_type, name):
+    lb = bound_dict[var_type]['lower'][name]
+    ub = bound_dict[var_type]['upper'][name]
+    def random_uniform():
+        return np.random.uniform(lb, ub)
+    
+    return random_uniform
+
+
 if __name__ ==  '__main__' :
     sp = do_mpc.sampling.SamplingPlanner(overwrite=True)
     data_dir = os.path.join('.', 'closed_loop_lqr')
     pathlib.Path(data_dir).mkdir(parents=True, exist_ok=True)
 
-    def get_random_uniform_func(var_type, name):
-        lb = bound_dict[var_type]['lower'][name]
-        ub = bound_dict[var_type]['upper'][name]
-        def random_uniform():
-            return np.random.uniform(lb, ub)
-        
-        return random_uniform
 
 
     sp.set_sampling_var('C_a_0',   get_random_uniform_func('states', 'C_a'))
@@ -73,7 +75,7 @@ if __name__ ==  '__main__' :
     sp.set_sampling_var('C_b_set', get_random_uniform_func('states', 'C_b'))
     sp.set_sampling_var('random_contribution', np.random.rand)
 
-    plan = sp.gen_sampling_plan(200)
+    plan = sp.gen_sampling_plan(100)
     sp.export(os.path.join(data_dir, 'sampling_plan_lqr'))
 
 
@@ -110,7 +112,7 @@ def sampling_function(
     simulator.x0 = x0
     lqr.x0 = x0
 
-    for k in range(20):
+    for k in range(500):
         u0 = (1-random_contribution)*lqr.make_step(x0) + random_contribution*random_input.make_step(x0)
         u0 = lqr_clipper(u0) 
         x0 = simulator.make_step(u0)

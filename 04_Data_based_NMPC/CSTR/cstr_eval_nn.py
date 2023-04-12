@@ -20,6 +20,7 @@ sys.path.append(example_path)
 import cstr_model
 import cstr_controller
 import cstr_simulator
+import cstr_helper
 
 
 # %% [markdown]
@@ -90,7 +91,7 @@ def get_nn_model(onnx):
 
 
 # %%
-def random_x0(bound_dict):
+def random_x0(bound_dict, key=None):
     return np.array([
         np.random.uniform(lb, ub) for lb, ub in zip(bound_dict['states']['lower'].values(), bound_dict['states']['upper'].values())
     ])
@@ -127,26 +128,36 @@ if __name__ == '__main__':
     # ### Plot the results
     # - Plot the states and inputs of both models
     # %%
-    fig, ax = plt.subplots(6,1, sharex=True)
-    
-    def plot_results(data, ax, **kwargs):
-        ax[0].plot(data['_time'], data['_x','C_a'], linewidth=1, **kwargs)
-        ax[1].plot(data['_time'], data['_x','C_b'], linewidth=1, **kwargs)
-        ax[2].plot(data['_time'], data['_x','T_R'], linewidth=1, **kwargs)
-        ax[3].plot(data['_time'], data['_x','T_K'], linewidth=1, **kwargs)
-        ax[4].step(data['_time'], data['_u','F'], linewidth=1, where='post', **kwargs)
-        ax[5].step(data['_time'], data['_u','Q_dot'], linewidth=1, where='post', **kwargs)
-        ax[0].set_ylabel('C_a')
-        ax[1].set_ylabel('C_b')
-        ax[2].set_ylabel('T_R')
-        ax[3].set_ylabel('T_K')
-        ax[4].set_ylabel('F')
-        ax[5].set_ylabel('Q_dot')
-        ax[5].set_xlabel('time')
-        fig.tight_layout()
-        fig.align_ylabels()
+    fig, ax = plt.subplots(6, 1, sharex=True)
 
-    plot_results(true_simulator.data, ax, label='Physical model', marker='o', markevery=5, markersize=5, markerfacecolor='none')
-    plot_results(nn_simulator.data, ax, label='NN', marker='x', markevery=5, markersize=5, markerfacecolor='none')
+    cstr_helper.plot_cstr_results(true_simulator.data, (fig, ax), label='Physical model', marker='o', markevery=5, markersize=5, markerfacecolor='none')
+    cstr_helper.plot_cstr_results(nn_simulator.data, (fig, ax), label='NN', marker='x', markevery=5, markersize=5, markerfacecolor='none')
+
 
     ax[0].legend()
+    # %% [markdown]
+    # ## Test MPC with NN model
+
+    # %%
+    nn_mpc, nn_mpc_template = cstr_controller.get_mpc(nn_model, bound_dict)
+
+    # %% 
+
+    nn_mpc.reset_history()
+    true_simulator.reset_history()
+
+    x0 = random_x0(bound_dict).reshape(-1,1)
+
+    true_simulator.x0 = x0
+    nn_mpc.x0 = x0 
+    nn_mpc.set_initial_guess()
+
+    for k in range(50):
+        u0 = nn_mpc.make_step(x0)
+        x0 = true_simulator.make_step(u0)
+
+    # %%
+    fig, ax = plt.subplots(6, 1, sharex=True)
+    cstr_helper.plot_cstr_results(true_simulator.data, (fig, ax), label='Physical model', marker='o', markevery=5, markersize=5, markerfacecolor='none')
+
+# %%

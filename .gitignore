@@ -135,3 +135,5 @@ dmypy.json
 04_Data_based_NMPC/CSTR/data_generation/cstr_data_lqr.pkl
 
 *.onnx
+
+04_Data_based_NMPC/CSTR/evaluation/closed_loop_meta/

@@ -20,6 +20,7 @@ import os
 import json
 import pathlib
 import multiprocessing as mp
+import importlib
 
 from casadi import *
 from casadi.tools import *
@@ -30,6 +31,7 @@ sys.path.append(example_path)
 import cstr_model
 import cstr_controller
 import cstr_simulator
+from cstr_helper import get_random_uniform_func
 
 # Control packages
 import do_mpc
@@ -49,16 +51,7 @@ IS_INTERACTIVE = hasattr(sys, 'ps1')
 # %% [code]
 
 bound_dict = json.load(open(os.path.join(example_path, 'config','cstr_bounds.json')))
-u_lb = np.array((bound_dict['inputs']['lower']['F'], bound_dict['inputs']['lower']['Q_dot'])).reshape(-1,1)
-u_ub = np.array((bound_dict['inputs']['upper']['F'], bound_dict['inputs']['upper']['Q_dot'])).reshape(-1,1)
 
-def get_random_uniform_func(var_type, name):
-    lb = bound_dict[var_type]['lower'][name]
-    ub = bound_dict[var_type]['upper'][name]
-    def random_uniform():
-        return np.random.uniform(lb, ub)
-    
-    return random_uniform
 
 
 if __name__ ==  '__main__' :
@@ -68,11 +61,11 @@ if __name__ ==  '__main__' :
 
 
 
-    sp.set_sampling_var('C_a_0',   get_random_uniform_func('states', 'C_a'))
-    sp.set_sampling_var('C_b_0',   get_random_uniform_func('states', 'C_b'))
-    sp.set_sampling_var('T_R_0',   get_random_uniform_func('states', 'T_R'))
-    sp.set_sampling_var('T_K_0',   get_random_uniform_func('states', 'T_K'))
-    sp.set_sampling_var('C_b_set', get_random_uniform_func('states', 'C_b'))
+    sp.set_sampling_var('C_a_0',   get_random_uniform_func(bound_dict, 'states', 'C_a'))
+    sp.set_sampling_var('C_b_0',   get_random_uniform_func(bound_dict, 'states', 'C_b'))
+    sp.set_sampling_var('T_R_0',   get_random_uniform_func(bound_dict, 'states', 'T_R'))
+    sp.set_sampling_var('T_K_0',   get_random_uniform_func(bound_dict, 'states', 'T_K'))
+    sp.set_sampling_var('C_b_set', get_random_uniform_func(bound_dict, 'states', 'C_b'))
     sp.set_sampling_var('random_contribution', np.random.rand)
 
     plan = sp.gen_sampling_plan(100)

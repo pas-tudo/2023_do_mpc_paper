@@ -33,7 +33,7 @@ import json
 from typing import Union, Optional, List, Callable
 
 
-def get_mpc(model, bound_dict):
+def get_mpc(model, bound_dict, overwrite_settings = {}):
     """
     --------------------------------------------------------------------------
     template_mpc: tuning parameters
@@ -50,9 +50,12 @@ def get_mpc(model, bound_dict):
         'collocation_type': 'radau',
         'collocation_deg': 2,
         'collocation_ni': 1,
+        'store_full_solution': True,
         # Use MA27 linear solver in ipopt for faster calculations:
         # 'nlpsol_opts': {'ipopt.linear_solver': 'MA27'}
     }
+
+    setup_mpc.update(overwrite_settings)
 
     mpc.set_param(**setup_mpc)
 

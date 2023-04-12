@@ -40,6 +40,7 @@ import time
 import cstr_model
 import cstr_controller
 import cstr_simulator
+import cstr_helper
 
 """ User settings: """
 show_animation = True
@@ -66,33 +67,7 @@ mpc.set_initial_guess()
 
 # Initialize graphic:
 graphics = do_mpc.graphics.Graphics(mpc.data)
-fig, ax = plt.subplots(5, sharex=True)
-# Configure plot:
-graphics.add_line(var_type='_x', var_name='C_a', axis=ax[0])
-graphics.add_line(var_type='_x', var_name='C_b', axis=ax[0])
-graphics.add_line(var_type='_tvp', var_name='C_b_set', axis=ax[0])
-graphics.add_line(var_type='_x', var_name='T_R', axis=ax[1])
-graphics.add_line(var_type='_x', var_name='T_K', axis=ax[1])
-graphics.add_line(var_type='_aux', var_name='T_dif', axis=ax[2])
-graphics.add_line(var_type='_u', var_name='Q_dot', axis=ax[3])
-graphics.add_line(var_type='_u', var_name='F', axis=ax[4])
-ax[0].set_ylabel('c [mol/l]')
-ax[1].set_ylabel('T [K]')
-ax[2].set_ylabel('$\Delta$ T [K]')
-ax[3].set_ylabel('Q [kW]')
-ax[4].set_ylabel('Flow [l/h]')
-ax[4].set_xlabel('time [h]')
-# Update properties for all prediction lines:
-for line_i in graphics.pred_lines.full:
-    line_i.set_linewidth(1)
-
-label_lines = graphics.result_lines['_x', 'C_a']+graphics.result_lines['_x', 'C_b']
-ax[0].legend(label_lines, ['C_a', 'C_b'])
-label_lines = graphics.result_lines['_x', 'T_R']+graphics.result_lines['_x', 'T_K']
-ax[1].legend(label_lines, ['T_R', 'T_K'])
-
-fig.align_ylabels()
-fig.tight_layout()
+fig, ax, graphics = cstr_helper.plot_cstr_results_new(mpc.data)
 plt.ion()
 
 def update_plot_callback(k):

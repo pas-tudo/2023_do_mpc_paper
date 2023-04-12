@@ -13,6 +13,7 @@ from casadi import *
 
 import os
 import sys
+from typing import Tuple
 
 import do_mpc
 
@@ -36,7 +37,30 @@ def train_test_split(data, test_fraction=0.2, **kwargs):
 data_train, data_test = train_test_split(data, test_fraction=0.2, random_state=42)
 # %%
 
-def get_model(data):
+def get_model(data: pd.DataFrame, n_layer: int = 4, n_neurons: int = 32) -> Tuple[keras.Model, keras.Model, keras.layers.Normalization]:
+    """
+    Get neural network model architecture.
+
+    Parameters
+    ----------
+    data : pd.DataFrame
+        Data used for training. This data is used to adapt the normalization layers and determine the input and output dimensions.
+    n_layer : int, optional
+        Number of hidden layers, by default 4
+    n_neurons : int, optional
+        Number of neurons per hidden layer, by default 32
+
+    Returns
+    -------
+    train_model : keras.Model
+        Model used for training (returns scaled outputs)
+    eval_model : keras.Model
+        Model used for evaluation (returns unscaled outputs)
+    scale_outputs : keras.layers.Normalization
+        Normalization layer for the outputs. Should be called on targets before training.
+    """
+
+
     # Model input
     x_k_tf = keras.Input(shape=(data['x_k'].shape[1]), name='x_k')
     u_k_tf = keras.Input(shape=(data['u_k'].shape[1]), name='u_k')
@@ -53,8 +77,8 @@ def get_model(data):
     layer_in = scale_inputs(layer_in)
 
     # Hidden layers
-    for k in range(4):
-        layer_in = keras.layers.Dense(32, 
+    for k in range(n_layer):
+        layer_in = keras.layers.Dense(n_neurons, 
             activation='tanh', 
             name=f'hidden_{k}',
         )(layer_in)
@@ -72,7 +96,7 @@ def get_model(data):
 
 
 # %%
-train_model, eval_model, scale_outputs = get_model(data_train)
+train_model, eval_model, scale_outputs = get_model(data_train, n_layer=4, n_neurons=32)
 
 
 # Prepare model for training

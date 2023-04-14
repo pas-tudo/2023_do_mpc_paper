@@ -18,10 +18,20 @@ import sys
 import os
 import json
 import pathlib
-import multiprocessing as mp
 import importlib
 
 import do_mpc
+
+example_path = os.path.join('..','..','..','01_Example_Systems','CSTR')
+plot_path = os.path.join('..','..','..','00_plotting')
+sys.path.append(example_path)
+sys.path.append(plot_path)
+import cstr_helper
+import mplconfig
+
+importlib.reload(mplconfig)
+
+mplconfig.config_mpl(os.path.join('..','..','..','00_plotting','notation.tex'))
 # %%
 
 # %% [markdown]
@@ -37,6 +47,18 @@ plan = do_mpc.tools.load_pickle(os.path.join(data_dir, 'sampling_plan_closed_loo
 
 dh = do_mpc.sampling.DataHandler(plan)
 dh.data_dir = os.path.join(data_dir, '')
+
+# %%
+if False:
+    fig, ax = plt.subplots(4,1)
+
+    for dh_k in dh[:]:
+        _,_, sim_graphics = cstr_helper.plot_cstr_results_new(dh_k['res']['mpc_true'], (fig, ax),  linewidth = 1, alpha = .3,  with_legend=False, with_setpoint=False)
+        _ = [ax_i.set_prop_cycle(None) for ax_i in ax]
+        c_,_, nn_graphics = cstr_helper.plot_cstr_results_new(dh_k['res']['mpc_nn'], (fig, ax), linewidth=1, alpha=.3,  with_legend=False, with_setpoint=False)
+        _ = [ax_i.set_prop_cycle(None) for ax_i in ax]
+
+
 # %% [markdown]
 # # Post-preocessing of the results
 
@@ -81,38 +103,36 @@ dh.set_post_processing('nn_mpc_cons_viol',
 dh.set_post_processing('exact_mpc_success',
     lambda res: perc_success(res['mpc_true'])
 )
+
 # %%
-# df_res = pd.DataFrame(dh.filter(output_filter = lambda exact_mpc_success: exact_mpc_success > 0 ))
-df_res = pd.DataFrame(dh[:])
+df_res = pd.DataFrame(dh.filter(output_filter = lambda exact_mpc_success: exact_mpc_success > 0.99 ))
+# df_res = pd.DataFrame(dh[:])
 df_res.sort_values(by='C_b_set', inplace=True)
 
 # %%
 # of type scatter
-fig, ax = plt.subplots(2,1, sharex=True)
+fig, ax = plt.subplots(2,1, figsize=(mplconfig.columnwidth, 1.2*mplconfig.columnwidth), dpi=160, sharex=True)
 
 ax[0].plot(df_res['C_b_set'], df_res['exact_mpc_cost'], 'o', label='exact model', color='k', markerfacecolor='none')
 ax[0].plot(df_res['C_b_set'], df_res['nn_mpc_cost'], 'x', label='NN model', color='k')
-ax[0].legend(title='MPC with:', loc='lower right')
+ax[0].legend(title='MPC with:', loc='upper left', fontsize='small')
 
 ax[0].set_ylabel('closed-loop cost [-]')
 
-exact_mpc_cons_viol = np.concatenate(df_res['exact_mpc_cons_viol'].apply(lambda x: np.percentile(x,90, axis=0, keepdims=True)))
-nn_mpc_cons_viol = np.concatenate(df_res['nn_mpc_cons_viol'].apply(lambda x: np.percentile(x,90, axis=0, keepdims=True)))
+exact_mpc_cons_viol = np.concatenate(df_res['exact_mpc_cons_viol'].apply(lambda x: np.percentile(x,100, axis=0, keepdims=True)))
+nn_mpc_cons_viol = np.concatenate(df_res['nn_mpc_cons_viol'].apply(lambda x: np.percentile(x,100, axis=0, keepdims=True)))
 
-ax[1].semilogy(df_res['C_b_set'], exact_mpc_cons_viol, 'o',label=['c_a','c_b','T_R','T_K'])
+ax[1].semilogy(df_res['C_b_set'], exact_mpc_cons_viol, 'o',label=['$c_A$ [-]','$c_B$ [-]','$T_R$ [°C]','$T_K$ [°C]'], markerfacecolor='none')
 ax[1].set_prop_cycle(None)
 ax[1].semilogy(df_res['C_b_set'], nn_mpc_cons_viol, 'x')
 
-ax[1].set_ylabel('90-percentile\n constraint violation')
-ax[1].legend(ncols=4, loc='lower right')
+ax[1].set_ylabel('max. constraint violation')
+ax[0].set_xlabel(r'$c_B^\text{set}$ [-]')
+ax[1].legend(loc='lower left', fontsize='small', ncols=2)
 
 fig.align_ylabels()
-fig.tight_layout()
+fig.tight_layout(h_pad=0.5,  pad=0.)
 
-
-
-# %%
-
-nn_mpc_cons_viol# %%
+fig.savefig(os.path.join(plot_path, 'results', 'mpc_with_nn_vs_exact_model_meta.pgf'))
 
 # %%

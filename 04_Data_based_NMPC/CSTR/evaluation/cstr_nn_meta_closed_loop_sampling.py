@@ -34,7 +34,6 @@ import cstr_helper
 from cstr_helper import get_random_uniform_func
 import cstr_nn_model
 
-importlib.reload(cstr_controller)
 
 # Control packages
 import do_mpc
@@ -55,6 +54,9 @@ IS_INTERACTIVE = hasattr(sys, 'ps1')
 
 bound_dict = json.load(open(os.path.join(example_path, 'config','cstr_bounds.json')))
 
+# Increase the bounds for the intial temperatures to avoid stalling the reactor.
+bound_dict['states']['lower']['T_R'] = 90
+bound_dict['states']['lower']['T_K'] = 90
 
 
 if __name__ ==  '__main__' :
@@ -66,12 +68,10 @@ if __name__ ==  '__main__' :
     sp.set_sampling_var('C_b_0',   get_random_uniform_func(bound_dict, 'states', 'C_b', reduce_range = 0.3))
     sp.set_sampling_var('T_R_0',   get_random_uniform_func(bound_dict, 'states', 'T_R', reduce_range = 0.3))
     sp.set_sampling_var('T_K_0',   get_random_uniform_func(bound_dict, 'states', 'T_K', reduce_range = 0.3))
-    sp.set_sampling_var('C_b_set', get_random_uniform_func(bound_dict, 'states', 'C_b', reduce_range = 0.3))
+    sp.set_sampling_var('C_b_set', get_random_uniform_func(bound_dict, 'states', 'C_b', reduce_range = 0.))
 
     plan = sp.gen_sampling_plan(50)
     sp.export(os.path.join(data_dir, 'sampling_plan_closed_loop_meta'))
-
-
 
 
 # %% [markdown]
@@ -159,7 +159,7 @@ if __name__ ==  '__main__' :
     if IS_INTERACTIVE:
         sampler.sample_idx(0)
     else:
-        with mp.Pool(processes=4) as pool:
+        with mp.Pool(processes=6) as pool:
             p = pool.map(sampler.sample_idx, list(range(sampler.n_samples)))
 
 

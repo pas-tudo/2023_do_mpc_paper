@@ -4,6 +4,7 @@ import numpy as np
 import do_mpc
 from typing import Tuple, Optional
 from enum import Enum, auto
+import pdb
 
 def get_random_uniform_func(bound_dict, var_type, names, reduce_range = 0):
     """
@@ -18,9 +19,9 @@ def get_random_uniform_func(bound_dict, var_type, names, reduce_range = 0):
 
     # Reduce the range of the bounds by the given factor
     delta = ub - lb
-    reduce_range = np.clip(reduce_range, 0, 1)
-    lb += delta * reduce_range/2
-    ub -= delta * reduce_range/2
+    reduce_range_as_float_between_0_and_1 = np.clip(reduce_range, 0, 1, dtype=np.float64) 
+    lb = lb + (delta * reduce_range_as_float_between_0_and_1)/2
+    ub = ub - (delta * reduce_range_as_float_between_0_and_1)/2
 
 
     def random_uniform():

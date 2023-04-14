@@ -72,7 +72,7 @@ def get_mpc(model, bound_dict, overwrite_settings = {}):
 
     mpc.set_objective(mterm=mterm, lterm=lterm)
 
-    mpc.set_rterm(F=1e-2, Q_dot = 1e-4)
+    mpc.set_rterm(F=1e-0, Q_dot = 1e-4)
 
 
     mpc.bounds['lower', '_x', 'C_a'] = bound_dict['states']['lower']['C_a']

@@ -17,7 +17,7 @@ import sys
 import importlib
 
 # Typing information
-from typing import Tuple, List, Dict, Union, Optional, Any
+from typing import Tuple, List, Dict, Union, Optional, Any, Callable
 
 # Specialized packages
 from casadi import *
@@ -29,6 +29,7 @@ import do_mpc
 # Quadcopter 
 import qcmodel
 from plot_results import plot_results
+from qctrajectory import Trajectory
     
 
 # %% 
@@ -51,8 +52,8 @@ def get_simulator(t_step: float, model: do_mpc.model.Model) -> do_mpc.simulator.
     simulator.set_param(t_step = t_step)
 
     # Pass dummy tvp function (these wont affect the simulation)
-    sim_tvp_template = simulator.get_tvp_template()
-    simulator.set_tvp_fun(lambda t: sim_tvp_template)
+    sim_p_template = simulator.get_p_template()
+    simulator.set_p_fun(lambda t: sim_p_template)
 
     simulator.setup()
 
@@ -101,7 +102,7 @@ def get_MPC(t_step: float, model: do_mpc.model.Model) -> Tuple[do_mpc.controller
     setup_mpc = {
         'n_horizon': 30,
         't_step': t_step,   
-        'store_full_solution': True,
+        'store_full_solution': False,
         # Use MA27 linear solver in ipopt for faster calculations:
         'nlpsol_opts': {'ipopt.linear_solver': 'mumps'}
     }
@@ -110,21 +111,23 @@ def get_MPC(t_step: float, model: do_mpc.model.Model) -> Tuple[do_mpc.controller
     surpress_ipopt = {'ipopt.print_level':0, 'ipopt.sb': 'yes', 'print_time':0}
     mpc.set_param(nlpsol_opts = surpress_ipopt)
 
-    mpc_tvp_template = mpc.get_tvp_template()
-    def mpc_tvp_fun(t_now):
-        return mpc_tvp_template
-    mpc.set_tvp_fun(mpc_tvp_fun)
+    p_template = mpc.get_p_template(n_combinations=1)
+    def p_fun(t_now):
+        return p_template
+    mpc.set_p_fun(p_fun)
 
 
     lterm = 0 
-    lterm += sum1((model.x['pos'] - model.tvp['pos_setpoint'])**2)# * qc.model.tvp['setpoint_weight', 0]
+    lterm += sum1((model.x['pos'] - model.p['pos_setpoint'])**2)# * qc.model.tvp['setpoint_weight', 0]
     lterm += .1*sum1((model.x['dpos'])**2) #* model.tvp['setpoint_weight', 0]
     lterm += .1*sum1((model.x['omega'])**2)# * model.tvp['setpoint_weight', 1]
-    lterm += sum1((model.x['phi']- model.tvp['phi_setpoint'])**2) #* model.tvp['setpoint_weight', 3]
+
+    delta_yaw = model.x['phi',0] - model.p['yaw_setpoint']
+    lterm += atan2(sin(delta_yaw), cos(delta_yaw))**2
 
     mterm = 10*lterm
     mpc.set_objective(lterm=lterm, mterm=mterm)
-    mpc.set_rterm(thrust=10)
+    mpc.set_rterm(thrust=1)
 
     mpc.bounds['lower','_u','thrust'] = 0
     mpc.bounds['upper','_u','thrust'] = 0.3
@@ -134,30 +137,7 @@ def get_MPC(t_step: float, model: do_mpc.model.Model) -> Tuple[do_mpc.controller
     mpc.x0 = np.ones((model.n_x,1))*1e-3
     mpc.set_initial_guess()
 
-    return mpc, mpc_tvp_template
-
-def get_aux_LQR(t_step: float, tracking_model: do_mpc.model.LinearModel):
-
-    tracking_model_discrete = tracking_model.discretize(t_step)
-
-    lqr = do_mpc.controller.LQR(tracking_model_discrete)
-    lqr.set_param(t_step = t_step)
-    
-
-    Q = np.diag(np.array([
-        1,1,1, # Position
-        0,0,0, # Velocity
-        1,1,1, # Angle
-    ]))
-    R = np.diag(np.array([
-        1e-1,1e-1,1e-1,
-        1e-2,1e-2,1e-2,
-    ]))
-
-    lqr.set_objective(Q = Q, R = R)
-    lqr.setup()
-
-    return lqr
+    return mpc, p_template
 
 
 # %%
@@ -179,8 +159,6 @@ def lqr_flyto(
     x_ss = np.zeros((12,1))
     x_ss[:3,:] = pos_setpoint
 
-    tvp = x_ss[:9,:]
-
     lqr.set_setpoint(xss = x_ss, uss = lqr.uss)
     x0 = simulator.x0
 
@@ -189,24 +167,18 @@ def lqr_flyto(
         u0 = np.clip(u0, 0, 0.3)
         x0 = simulator.make_step(u0) + np.random.randn(12,1)*v_x
 
-        lqr.data.update(_tvp=tvp)
-
 
 def mpc_flyto(
         simulator: do_mpc.simulator.Simulator, 
         mpc: do_mpc.controller.MPC, 
-        tvp_template: Any,
+        p_template: Any,
         v_x: Union[np.ndarray, float] = None,
         pos_setpoint: Optional[np.ndarray] = np.ones((3,1)),
         N_iter: Optional[int] = 60,
         ) -> None:
 
-    tvp_template['_tvp',:] = 0 # Reset all setpoints
-    tvp_template['_tvp',:, 'pos_setpoint'] = pos_setpoint 
-    tvp_template['_tvp',:, 'setpoint_weight', 0] = 10 # [pos, dpos, omega, phi] weights
-    tvp_template['_tvp',:, 'setpoint_weight', 1] = 1 # [pos, dpos, omega, phi] weights
-    tvp_template['_tvp',:, 'setpoint_weight', 2] = 1 # [pos, dpos, omega, phi] weights
-    tvp_template['_tvp',:, 'setpoint_weight', 3] = 1 # [pos, dpos, omega, phi] weights
+    p_template['_p',0] = 0 # Reset all setpoints
+    p_template['_p',0, 'pos_setpoint'] = pos_setpoint 
 
     if v_x is None:
         v_x = _variance_state_noise
@@ -221,37 +193,44 @@ def figure_eight(t, a=1, s=1, height=1):
     """Generate a figure eight trajectory"""
     t = np.atleast_2d(t)
     return a*np.concatenate([
-        np.sin(s*t),
-        np.sin(s*t)*cos(s*t),
+        a*np.sin(s*t),
+        a*np.sin(s*t)*cos(s*t),
         np.ones_like(s*t)*height
     ], axis=0)
 
-def mpc_figure_eight(
-        simulator: do_mpc.simulator.Simulator, 
-        mpc: do_mpc.controller.MPC, 
-        tvp_template: Any,
+def phi_figure_eight(t, a=1, s=1, height=1):
+    """Generate a figure eight trajectory"""
+    t = np.atleast_2d(t)
+
+    d_x = a*s*np.cos(s*t) 
+    d_y = a*s*(np.cos(s*t)**2-np.sin(s*t)**2)
+
+    theta = np.arctan2(d_y, d_x)
+    return theta
+
+
+def mpc_fly_trajectory(
+        simulator: do_mpc.simulator.Simulator,
+        mpc: do_mpc.controller.MPC,
+        p_template: Any,
+        trajectory: Trajectory,
         v_x: Union[np.ndarray, float] = None,
         N_iter: Optional[int] = 200,
+        callbacks: Optional[List[Callable]] = [],
         ) -> None:
 
-    tvp_template['_tvp',:] = 0 # Reset all setpoints
-    tvp_template['_tvp',:, 'setpoint_weight', 0] = 10 # [pos, dpos, omega, phi] weights
-    tvp_template['_tvp',:, 'setpoint_weight', 1] = 0.1 # [pos, dpos, omega, phi] weights
-    tvp_template['_tvp',:, 'setpoint_weight', 2] = 1 # [pos, dpos, omega, phi] weights
-    tvp_template['_tvp',:, 'setpoint_weight', 3] = 0 # [pos, dpos, omega, phi] weights
+    p_template['_p',0] = 0 # Reset all setpoints
 
     if v_x is None:
-        v_x = np.array([
-            1e-2, 1e-2, 1e-2,
-            0,0,0,
-            0,0,0,
-            0,0,0
-        ]).reshape(-1,1)
+        v_x = _variance_state_noise
 
     x0 = simulator.x0
     for k in range(N_iter):
-        t = np.arange(mpc.n_horizon+1)*mpc.t_step+mpc.t0
-        tvp_template['_tvp',:, 'pos_setpoint'] =  vertsplit(figure_eight(t, s=1, height=2).T)
+        traj_setpoint = trajectory(mpc.t0).T
+        p_template['_p',0, 'pos_setpoint'] = traj_setpoint[:3] 
+        p_template['_p',0, 'yaw_setpoint'] = traj_setpoint[-1]
         u0 = mpc.make_step(x0)
         x0 = simulator.make_step(u0) + np.random.randn(12,1)*v_x
-        
+
+        for cb in callbacks:
+            cb()

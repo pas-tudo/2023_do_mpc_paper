@@ -82,20 +82,15 @@ def get_model(conf: QuadcopterConfig, with_pos:bool = True, process_noise:bool=F
 
     # Initialize model
     model = do_mpc.model.Model('continuous')
-    if with_pos:
-        pos = model.set_variable('_x',  'pos', (3,1)) # Position in inertial frame
-        pos_setpoint = model.set_variable('_tvp', 'pos_setpoint', (3,1))
-
+    pos = model.set_variable('_x',  'pos', (3,1)) # Position in inertial frame
     dpos = model.set_variable('_x',  'dpos', (3,1)) # Velocity in inertial frame
     phi = model.set_variable('_x',  'phi', (3,1)) # Orientation in inertial frame (yaw, pitch, roll)
     omega = model.set_variable('_x',  'omega', (3,1)) # Angular velocity in body frame
     f = model.set_variable('_u',  'thrust',(4,1)) # Thrust of each rotor
 
     # Setpoint variables (used in tracking MPC)
-    dpos_setpoint = model.set_variable('_tvp',  'dpos_setpoint', (3,1))
-    phi_setpoint = model.set_variable('_tvp',  'phi_setpoint', (3,1))
-    # omega_setpoint = model.set_variable('_tvp',  'omega_setpoint', (3,1))
-    # setpoint_weights = model.set_variable('_tvp',  'setpoint_weight', (3,1))
+    pos_setpoint = model.set_variable('_p', 'pos_setpoint', (3,1))
+    yaw_setpoint = model.set_variable('_p',  'yaw_setpoint', (1,1))
 
     # Prepare intermediates
     F = vertcat(0,0,sum1(f)) # total force in body frame
@@ -107,8 +102,7 @@ def get_model(conf: QuadcopterConfig, with_pos:bool = True, process_noise:bool=F
 
 
     # Set all RHS
-    if with_pos:
-        model.set_rhs('pos', dpos, process_noise=process_noise)
+    model.set_rhs('pos', dpos, process_noise=process_noise)
     model.set_rhs('dpos',ddpos, process_noise=process_noise)
     model.set_rhs('phi', dphi, process_noise=process_noise)
     model.set_rhs('omega', domega, process_noise=process_noise)
@@ -116,30 +110,6 @@ def get_model(conf: QuadcopterConfig, with_pos:bool = True, process_noise:bool=F
     model.setup()
 
     return model
-
-
-def get_tracking_model():
-
-    tracking_model = do_mpc.model.LinearModel('continuous')
-
-    pos = tracking_model.set_variable('_x', 'pos', (3,1))
-    dpos = tracking_model.set_variable('_x', 'dpos', (3,1))
-    phi = tracking_model.set_variable('_x', 'phi', (3,1))
-
-    dpos_set = tracking_model.set_variable('_u', 'dpos_set', (3,1))
-    phi_set = tracking_model.set_variable('_u', 'phi_set', (3,1))
-
-    tau1 = .5
-    tau2 = .5
-
-    tracking_model.set_rhs('pos', dpos)
-    tracking_model.set_rhs('dpos', (dpos_set-dpos)/tau1)
-    tracking_model.set_rhs('phi', (phi_set-phi)/tau2)
-
-    tracking_model.setup()
-
-    return tracking_model
-
 
 def get_stable_point(model, p=0, v=0, w=0, tvp=0):
     """Stable point for the quadcopter model given a setpoint_pos and the configured model.

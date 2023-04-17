@@ -1,10 +1,76 @@
 import numpy as np
 from casadi import *
 import sys
-sys.path.append(os.path.join('..', '..', '..', 'do-mpc'))
 import do_mpc
+from dataclasses import dataclass
 
-class Quadcopter:
+
+@dataclass
+class QuadcopterConfig:
+    J = np.array([
+            [16.571710, 0.830806, 0.718277],
+            [0.830806, 16.655602, 1.800197],
+            [0.718277, 1.800197, 29.261652],
+        ])*1e-6 
+    """
+    Matrix of inertia of the quadcopter in the body frame [kg/m2].
+    """
+
+    d_t_i = 0.005964552
+    """
+    Linear thrust to torque relationship.
+    """
+
+    motor_spin_coeff = np.array([1,-1,-1,1])
+    """
+    Coefficient to account for the direction of the motor spin.
+    """
+
+    l_a = 40*1e-3
+    """
+    Arm length [m] of the quadcopter.
+    """
+
+    m = 28*1e-3 
+    """
+    Mass of the quadcopter [kg].
+    """
+
+    g = np.array([0,0,9.81])
+    """
+    Gravity vector [m/s2].
+    """
+
+    @property
+    def d_t(self):
+        """
+        Linear thrust to torque relationship for each rotor (accounting for motor spin direction)
+        """
+        return self.d_t_i * self.motor_spin_coeff
+    
+    @property
+    def d_y(self):
+        """
+        y-position of rotors in body frame [m]
+        """
+        return self.l_a*np.sin([np.pi/4, np.pi/4,-np.pi/4,-np.pi/4])
+    
+    @property
+    def d_x(self):
+        """
+        x-position of rotors in body frame [m]
+        """
+        return self.l_a*np.sin([np.pi/4,-np.pi/4, np.pi/4,-np.pi/4])
+
+    @property
+    def D(self):
+        """
+        Stacked vector of :py:attr:`d_x`, :py:attr:`d_y` and :py:attr:`d_t`.
+        """
+        return np.stack([self.d_y, -self.d_x, self.d_t])
+
+
+def get_model(conf: QuadcopterConfig, with_pos:bool = True, process_noise:bool=False):
     """Baseline model for a quadcopter.
     The model represents a Crazyflie 2.0 quadcopter. See datasheet:
     https://www.bitcraze.io/documentation/hardware/crazyflie_2_0/crazyflie_2_0-datasheet.pdf
@@ -12,139 +78,89 @@ class Quadcopter:
     Inertia, mass and linear thrust taken from:
     https://www.research-collection.ethz.ch/handle/20.500.11850/214143
     """
-    def __init__(self):
-        # Parameters
-        self.J = np.array([
-                [16.571710, 0.830806, 0.718277],
-                [0.830806, 16.655602, 1.800197],
-                [0.718277, 1.800197, 29.261652],
-            ])*1e-6 # inertia [kg/m2]
+    with_pos = with_pos
 
-        self.d_t = 0.005964552 # linear thrust to torque relationship
-        self.d_t *= np.array([1,-1,-1,1]) # motor spin directions
+    # Initialize model
+    model = do_mpc.model.Model('continuous')
+    if with_pos:
+        pos = model.set_variable('_x',  'pos', (3,1)) # Position in inertial frame
+        pos_setpoint = model.set_variable('_tvp', 'pos_setpoint', (3,1))
 
-        self.l_a = 40*1e-3 # Arm length [m] of the quadcopter
-        self.d_y = self.l_a*np.sin([np.pi/4, np.pi/4,-np.pi/4,-np.pi/4]) # position of rotors in body frame [m]
-        self.d_x = self.l_a*np.sin([np.pi/4,-np.pi/4, np.pi/4,-np.pi/4]) # position of rotors in body frame [m]
+    dpos = model.set_variable('_x',  'dpos', (3,1)) # Velocity in inertial frame
+    phi = model.set_variable('_x',  'phi', (3,1)) # Orientation in inertial frame (yaw, pitch, roll)
+    omega = model.set_variable('_x',  'omega', (3,1)) # Angular velocity in body frame
+    f = model.set_variable('_u',  'thrust',(4,1)) # Thrust of each rotor
 
-        self.D = np.stack([self.d_y, -self.d_x, self.d_t])
+    # Setpoint variables (used in tracking MPC)
+    dpos_setpoint = model.set_variable('_tvp',  'dpos_setpoint', (3,1))
+    phi_setpoint = model.set_variable('_tvp',  'phi_setpoint', (3,1))
+    # omega_setpoint = model.set_variable('_tvp',  'omega_setpoint', (3,1))
+    # setpoint_weights = model.set_variable('_tvp',  'setpoint_weight', (3,1))
 
-        self.m = 28*1e-3 # mass [kg]
-
-        self.g = np.array([0,0,9.81]) # gravity vector [m/s2]
-
-        # Initialize model
-        self.model = do_mpc.model.Model('continuous')
-        self.pos = self.model.set_variable('_x',  'pos', (3,1)) # Position in inertial frame
-        self.dpos = self.model.set_variable('_x',  'dpos', (3,1)) # Velocity in inertial frame
-        self.phi = self.model.set_variable('_x',  'phi', (3,1)) # Orientation in inertial frame (yaw, pitch, roll)
-        self.omega = self.model.set_variable('_x',  'omega', (3,1)) # Angular velocity in body frame
-        self.f = self.model.set_variable('_u',  'thrust',(4,1)) # Thrust of each rotor
-
-        self.pos_setpoint = self.model.set_variable('_tvp', 'pos_setpoint', (3,1))
-        self.dpos_setpoint = self.model.set_variable('_tvp',  'dpos_setpoint', (3,1))
-        self.phi_setpoint = self.model.set_variable('_tvp',  'phi_setpoint', (3,1))
-        self.omega_setpoint = self.model.set_variable('_tvp',  'omega_setpoint', (3,1))
-        self.setpoint_weights = self.model.set_variable('_tvp',  'setpoint_weight', (4,1))
+    # Prepare intermediates
+    F = vertcat(0,0,sum1(f)) # total force in body frame
+    R = rot_mat(phi[0],phi[1],phi[2]) # rotation matrix from body to inertial frame
+    ddpos = 1/conf.m*R@F - conf.g # acceleration in inertial frame 
+    # Compute dphi and domega
+    dphi = model.set_expression('dphi', R@omega) # angular velocity in inertial frame
+    domega = np.linalg.inv(conf.J)@(conf.D@f-cross(omega,conf.J@omega)) # angular acceleration in body frame
 
 
-    def get_model(self, process_noise=False):
-        # Prepare intermediates
-        self.F = vertcat(0,0,sum1(self.f)) # total force in body frame
-        self.R = rot_mat(self.phi[0],self.phi[1],self.phi[2]) # rotation matrix from body to inertial frame
-        self.ddpos = 1/self.m*self.R@self.F - self.g # acceleration in inertial frame 
-        # Compute dphi and domega
-        dphi = self.model.set_expression('dphi', self.R@self.omega) # angular velocity in inertial frame
-        domega = np.linalg.inv(self.J)@(self.D@self.f-cross(self.omega,self.J@self.omega)) # angular acceleration in body frame
+    # Set all RHS
+    if with_pos:
+        model.set_rhs('pos', dpos, process_noise=process_noise)
+    model.set_rhs('dpos',ddpos, process_noise=process_noise)
+    model.set_rhs('phi', dphi, process_noise=process_noise)
+    model.set_rhs('omega', domega, process_noise=process_noise)
+
+    model.setup()
+
+    return model
 
 
-        # Set all RHS
-        self.model.set_rhs('pos', self.dpos, process_noise=process_noise)
-        self.model.set_rhs('dpos',self.ddpos, process_noise=process_noise)
-        self.model.set_rhs('phi', dphi, process_noise=process_noise)
-        self.model.set_rhs('omega', domega, process_noise=process_noise)
+def get_tracking_model():
 
-        self.model.setup()
+    tracking_model = do_mpc.model.LinearModel('continuous')
 
+    pos = tracking_model.set_variable('_x', 'pos', (3,1))
+    dpos = tracking_model.set_variable('_x', 'dpos', (3,1))
+    phi = tracking_model.set_variable('_x', 'phi', (3,1))
 
-    def stable_point(self, pos_setpoint, p=0, v=0, w=0, tvp=0):
-        """Stable point for the quadcopter model given a setpoint_pos and the configured model.
-        """
+    dpos_set = tracking_model.set_variable('_u', 'dpos_set', (3,1))
+    phi_set = tracking_model.set_variable('_u', 'phi_set', (3,1))
 
-        f =  sum1((self.model.x['pos']-pos_setpoint)**2)
-        f += sum1((self.model.x['dpos'])**2)
-        f += sum1((self.model.x['phi'])**2)
-        f += sum1((self.model.x['omega'])**2)
+    tau1 = .5
+    tau2 = .5
 
-        lbx = vertcat(self.model.x(-np.inf), self.model.u(0))
+    tracking_model.set_rhs('pos', dpos)
+    tracking_model.set_rhs('dpos', (dpos_set-dpos)/tau1)
+    tracking_model.set_rhs('phi', (phi_set-phi)/tau2)
 
-        nlp = {'x':vertcat(self.model.x, self.model.u), 'f': f, 'g':self.model._rhs, 'p':vertcat(self.model.p, self.model.v, self.model.w, self.model.tvp)}
-        opts = {'ipopt.print_level':0, 'ipopt.sb': 'yes', 'print_time':0}
-        S = nlpsol('S', 'ipopt', nlp, opts)
-        r = S(lbg=0,ubg=0, lbx=lbx, p=vertcat(self.model.p(p), self.model.v(v), self.model.w(w), self.model.tvp(tvp)))
+    tracking_model.setup()
+
+    return tracking_model
 
 
-        x_lin, u_lin = np.split(r['x'],[self.model.n_x])
-
-        return x_lin, u_lin
-
-class WeightUncertainQuadcopter(Quadcopter):
-    """Modified Version of quadcopter model with uncertain mass.
+def get_stable_point(model, p=0, v=0, w=0, tvp=0):
+    """Stable point for the quadcopter model given a setpoint_pos and the configured model.
     """
-    def __init__(self):
-        super().__init__()
 
-    def get_model(self, *args, **kwargs):
-        # Compute dphi and domega
-        self.mass_factor = self.model.set_variable('_p', 'mass_factor', (1,1))
-        self.m = self.m*self.mass_factor
+    # f =  sum1((self.model.x['pos']-pos_setpoint)**2)
+    f = sum1((model.x['dpos'])**2)
+    f += sum1((model.x['phi'])**2)
+    f += sum1((model.x['omega'])**2)
 
-        self.int_offset_pos = self.model.set_variable('_x', 'int_offset_pos', (3,1))
-        self.int_offset_dpos = self.model.set_variable('_x', 'int_offset_dpos', (3,1))
+    lbx = vertcat(model.x(-np.inf), model.u(0))
 
-        self.offset_pos = self.model.set_expression('offset_pos', self.pos_setpoint-self.pos)
-        self.offset_dpos = self.model.set_expression('doffset_pos', self.dpos_setpoint-self.dpos)
-
-        self.model.set_rhs('int_offset_pos', self.offset_pos)
-        self.model.set_rhs('int_offset_dpos',self.offset_dpos)
-
-        super().get_model(*args, **kwargs)
-
-class BiasedQuadcopter(Quadcopter):
-    """Modified Version of a quadcopter model with a bias in the acceleration and gyro measurements.
-    
-    """
-    def __init__(self):
-        super().__init__()
-
-        # Introduce bias
-        self.acc_bias  = self.model.set_variable('_p', 'acc_bias', (3,1))
-        self.gyro_bias = self.model.set_variable('_p', 'gyro_bias', (3,1))
-
-    def get_model(self, *args, **kwargs):
-
-        # Add bias
-        self.ddpos += self.acc_bias
-        self.omega += self.gyro_bias
-
-        super().get_model(*args, **kwargs)
+    nlp = {'x':vertcat(model.x, model.u), 'f': f, 'g':model._rhs, 'p':vertcat(model.p, model.v, model.w, model.tvp)}
+    opts = {'ipopt.print_level':0, 'ipopt.sb': 'yes', 'print_time':0}
+    S = nlpsol('S', 'ipopt', nlp, opts)
+    r = S(lbg=0,ubg=0, lbx=lbx, p=vertcat(model.p(p), model.v(v), model.w(w), model.tvp(tvp)))
 
 
-class MeasuredBiasedQuadcopter(BiasedQuadcopter):
-    """Modified Version of a quadcopter model with a bias in the acceleration and gyro measurements.
-    This model can be used for the MHE task.
-    
-    """
-    def __init__(self):
-        super().__init__()
+    x_lin, u_lin = np.split(r['x'],[model.n_x])
 
-    def get_model(self):
-        # Introduce measurements
-        self.model.set_meas('ddpos', self.ddpos, meas_noise=True)
-        self.model.set_meas('omega', self.omega, meas_noise=True)
-        self.model.set_meas('thrust', self.f, meas_noise=True)
-
-        super().get_model(process_noise=True)
+    return x_lin, u_lin
 
 
 

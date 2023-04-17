@@ -1,5 +1,6 @@
 from .basic import Sphere, Line, Arrow
 
+
 import numpy as np
 
 class DronePlot:
@@ -13,7 +14,7 @@ class DronePlot:
 
         Params:
             ax: (matplotlib axis) the axis where the sphere should be drawn
-            quadcopter: Instance of quadcopter class
+            quadcopter: Instance of QuadcopterConfig
             scale: (float) scale of the quadrotor (increase size for better visability)
 
         Returns:

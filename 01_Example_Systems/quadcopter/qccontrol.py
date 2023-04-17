@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import os
 import sys
+import pdb
 
 # Tools
 from IPython.display import clear_output
@@ -23,7 +24,6 @@ from casadi import *
 from casadi.tools import *
 
 # Control packages
-sys.path.append(os.path.join('..', '..', '..', 'do-mpc'))
 import do_mpc
 
 # Quadcopter 
@@ -43,11 +43,11 @@ _variance_state_noise =  np.array([
 
 # %%
 # Generate simulator for the quadcopter model
-def get_simulator(t_step: float, qc: qcmodel.Quadcopter) -> do_mpc.simulator.Simulator:
+def get_simulator(t_step: float, model: do_mpc.model.Model) -> do_mpc.simulator.Simulator:
     """
     Create a simulator for the quadcopter model.
     """
-    simulator = do_mpc.simulator.Simulator(qc.model)
+    simulator = do_mpc.simulator.Simulator(model)
     simulator.set_param(t_step = t_step)
 
     # Pass dummy tvp function (these wont affect the simulation)
@@ -58,37 +58,32 @@ def get_simulator(t_step: float, qc: qcmodel.Quadcopter) -> do_mpc.simulator.Sim
 
     return simulator
 # %%
-def get_LQR(t_step: float, qc: qcmodel.Quadcopter, 
+def get_LQR(t_step: float, model: do_mpc.model.Model,
         Q: Optional[np.ndarray] = None, R: Optional[np.ndarray] = None) -> do_mpc.controller.LQR:
     """
     Create a LQR estimator for the quadcopter model.
     """
 
     pos_setpoint = np.ones(3).reshape(-1,1)
-    x_ss, u_ss = qc.stable_point(pos_setpoint = pos_setpoint, p=1)
+    x_ss, u_ss = qcmodel.get_stable_point(model, p=1)
 
-    linearmodel = do_mpc.model.linearize(qc.model, x_ss, u_ss).discretize(t_step)
+    linearmodel = do_mpc.model.linearize(model, x_ss, u_ss).discretize(t_step)
 
     # Discrete time inifinite horizon LQR
     lqr = do_mpc.controller.LQR(linearmodel)
-    lqr.set_param(n_horizon = None)
+    lqr.set_param(n_horizon = None, t_step=t_step)
 
     # Default Q and R matrices or values from argument
     if Q is None:
-        Q = np.diag(np.array([
-            10,10,10, # Position
-            1,1,1, # Velocity
-            1,1,1, # Angle
-            1,1,1, # Angular velocity
-        ]))
-    elif Q.shape != (qc.model.n_x, qc.model.n_x):
-        raise ValueError("Q must be a {n_x}x{n_x} matrix.".format(nx=qc.model.n_x))
+        Q = np.diag(np.ones(model.n_x))
+    elif Q.shape != (model.n_x, model.n_x):
+        raise ValueError("Q must be a {n_x}x{n_x} matrix.".format(nx=model.n_x))
     else:
       pass
     if R is None:
         R = 1e-2*np.eye(4)
-    elif R.shape != (qc.model.n_u, qc.model.n_u):
-        raise ValueError("R must be a {nu}x{nu} matrix.".format(nu=qc.model.n_u))
+    elif R.shape != (model.n_u, model.n_u):
+        raise ValueError("R must be a {nu}x{nu} matrix.".format(nu=model.n_u))
 
     lqr.set_objective(Q = Q, R = R)
     lqr.setup()
@@ -100,8 +95,8 @@ def get_LQR(t_step: float, qc: qcmodel.Quadcopter,
 
 # %%
 
-def get_MPC(t_step: float, qc: qcmodel.Quadcopter) -> Tuple[do_mpc.controller.MPC, Any]:
-    mpc = do_mpc.controller.MPC(qc.model)
+def get_MPC(t_step: float, model: do_mpc.model.Model) -> Tuple[do_mpc.controller.MPC, Any]:
+    mpc = do_mpc.controller.MPC(model)
 
     setup_mpc = {
         'n_horizon': 30,
@@ -122,10 +117,10 @@ def get_MPC(t_step: float, qc: qcmodel.Quadcopter) -> Tuple[do_mpc.controller.MP
 
 
     lterm = 0 
-    lterm += sum1((qc.model.x['pos'] -  qc.model.tvp['pos_setpoint'])**2) * qc.model.tvp['setpoint_weight', 0]
-    lterm += sum1((qc.model.x['dpos']- qc.model.tvp['dpos_setpoint'])**2) * qc.model.tvp['setpoint_weight', 1]
-    lterm += sum1((qc.model.x['omega']- qc.model.tvp['omega_setpoint'])**2) * qc.model.tvp['setpoint_weight', 2]
-    lterm += sum1((qc.model.x['phi']- qc.model.tvp['phi_setpoint'])**2) * qc.model.tvp['setpoint_weight', 3]
+    lterm += sum1((model.x['pos'] - model.tvp['pos_setpoint'])**2)# * qc.model.tvp['setpoint_weight', 0]
+    lterm += .1*sum1((model.x['dpos'])**2) #* model.tvp['setpoint_weight', 0]
+    lterm += .1*sum1((model.x['omega'])**2)# * model.tvp['setpoint_weight', 1]
+    lterm += sum1((model.x['phi']- model.tvp['phi_setpoint'])**2) #* model.tvp['setpoint_weight', 3]
 
     mterm = 10*lterm
     mpc.set_objective(lterm=lterm, mterm=mterm)
@@ -136,10 +131,33 @@ def get_MPC(t_step: float, qc: qcmodel.Quadcopter) -> Tuple[do_mpc.controller.MP
 
     mpc.setup()
 
-    mpc.x0 = np.ones((qc.model.n_x,1))*1e-3
+    mpc.x0 = np.ones((model.n_x,1))*1e-3
     mpc.set_initial_guess()
 
     return mpc, mpc_tvp_template
+
+def get_aux_LQR(t_step: float, tracking_model: do_mpc.model.LinearModel):
+
+    tracking_model_discrete = tracking_model.discretize(t_step)
+
+    lqr = do_mpc.controller.LQR(tracking_model_discrete)
+    lqr.set_param(t_step = t_step)
+    
+
+    Q = np.diag(np.array([
+        1,1,1, # Position
+        0,0,0, # Velocity
+        1,1,1, # Angle
+    ]))
+    R = np.diag(np.array([
+        1e-1,1e-1,1e-1,
+        1e-2,1e-2,1e-2,
+    ]))
+
+    lqr.set_objective(Q = Q, R = R)
+    lqr.setup()
+
+    return lqr
 
 
 # %%
@@ -161,13 +179,17 @@ def lqr_flyto(
     x_ss = np.zeros((12,1))
     x_ss[:3,:] = pos_setpoint
 
-    lqr.set_setpoint(xss = x_ss)
+    tvp = x_ss[:9,:]
+
+    lqr.set_setpoint(xss = x_ss, uss = lqr.uss)
     x0 = simulator.x0
 
     for k in range(N_iter):
         u0 = lqr.make_step(x0)
         u0 = np.clip(u0, 0, 0.3)
         x0 = simulator.make_step(u0) + np.random.randn(12,1)*v_x
+
+        lqr.data.update(_tvp=tvp)
 
 
 def mpc_flyto(
@@ -233,37 +255,3 @@ def mpc_figure_eight(
         u0 = mpc.make_step(x0)
         x0 = simulator.make_step(u0) + np.random.randn(12,1)*v_x
         
-
-
-# %% 
-
-if __name__ == '__main__':
-    qc = qcmodel.Quadcopter()
-    qc.get_model()
-
-    t_step = 0.05
-    simulator = get_simulator(t_step, qc)
-    lqr = get_LQR(t_step, qc)
-    mpc, mpc_tvp_template = get_MPC(t_step, qc)
-
-    # Fly to new position test
-    simulator.reset_history()
-    mpc.reset_history()
-    simulator.x0 = np.zeros((12,1))
-    mpc.x0 = simulator.x0
-    mpc_flyto(simulator, mpc, mpc_tvp_template)
-    fig, ax = plot_results(qc, mpc.data, figsize=(12,8)) 
-
-
-    # Fly to new position test
-    simulator.reset_history()
-    mpc.reset_history()
-    simulator.x0 = np.zeros((12,1))
-    mpc.x0 = simulator.x0
-    mpc_figure_eight(simulator, mpc, mpc_tvp_template)
-    fig, ax = plot_results(qc, mpc.data, figsize=(12,8)) 
-
-    plt.show(block=True)
-
-
-# %%

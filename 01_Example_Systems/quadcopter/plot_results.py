@@ -27,8 +27,10 @@ class ResultPlot:
         self.graphics.add_line(var_type='_x', var_name='pos', axis=self.ax[0])  
         self.ax[0].set_prop_cycle(None)
         self.graphics.add_line(var_type='_p', var_name='pos_setpoint', axis=self.ax[0], linestyle='--')  
-        self.graphics.add_line(var_type='_x', var_name='dpos', axis=self.ax[1])  
+        self.graphics.add_line(var_type='_x', var_name='dpos', axis=self.ax[1]) 
         self.graphics.add_line(var_type='_x', var_name='phi', axis=self.ax[2])
+        self.ax[2].set_prop_cycle(None)
+        self.graphics.add_line(var_type='_p', var_name='yaw_setpoint', axis=self.ax[2], linestyle='--')
         self.graphics.add_line(var_type='_x', var_name='omega', axis=self.ax[3])
         self.graphics.add_line(var_type='_u', var_name='thrust', axis=self.ax[4])
         

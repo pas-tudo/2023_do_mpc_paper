@@ -118,14 +118,13 @@ def get_MPC(t_step: float, model: do_mpc.model.Model) -> Tuple[do_mpc.controller
 
 
     lterm = 0 
-    lterm += 5*sum1((model.x['pos'] - model.p['pos_setpoint'])**2)# * qc.model.tvp['setpoint_weight', 0]
-    lterm += .001*sum1((model.x['dpos'])**2) #* model.tvp['setpoint_weight', 0]
-    lterm += .001*sum1((model.x['omega'])**2)# * model.tvp['setpoint_weight', 1]
+    lterm += 10*sum1(model.x['pos']**2)# * qc.model.tvp['setpoint_weight', 0]
+    lterm += .01*sum1((model.x['dpos'])**2) #* model.tvp['setpoint_weight', 0]
+    lterm += .01*sum1((model.x['omega'])**2)# * model.tvp['setpoint_weight', 1]
+    lterm += 0.1*sum1(sin(model.x['phi', 1:])**2)
+    lterm += 1*(sin(model.x['phi',0]-model.p['yaw_setpoint'])**2)
 
-    delta_yaw = model.x['phi',0] - model.p['yaw_setpoint']
-    lterm += 5*atan2(sin(delta_yaw), cos(delta_yaw))**2
-
-    mterm = 10*lterm
+    mterm = lterm
     mpc.set_objective(lterm=lterm, mterm=mterm)
     mpc.set_rterm(thrust=0.1)
 
@@ -134,7 +133,7 @@ def get_MPC(t_step: float, model: do_mpc.model.Model) -> Tuple[do_mpc.controller
 
     mpc.setup()
 
-    mpc.x0 = np.ones((model.n_x,1))*1e-3
+    mpc.x0 = np.ones((model.n_x,1))*1e-2
     mpc.set_initial_guess()
 
     return mpc, p_template
@@ -188,26 +187,6 @@ def mpc_flyto(
         u0 = mpc.make_step(x0)
         x0 = simulator.make_step(u0) + np.random.randn(12,1)*v_x
         
-    
-def figure_eight(t, a=1, s=1, height=1):
-    """Generate a figure eight trajectory"""
-    t = np.atleast_2d(t)
-    return a*np.concatenate([
-        a*np.sin(s*t),
-        a*np.sin(s*t)*cos(s*t),
-        np.ones_like(s*t)*height
-    ], axis=0)
-
-def phi_figure_eight(t, a=1, s=1, height=1):
-    """Generate a figure eight trajectory"""
-    t = np.atleast_2d(t)
-
-    d_x = a*s*np.cos(s*t) 
-    d_y = a*s*(np.cos(s*t)**2-np.sin(s*t)**2)
-
-    theta = np.arctan2(d_y, d_x)
-    return theta
-
 
 def mpc_fly_trajectory(
         simulator: do_mpc.simulator.Simulator,
@@ -225,15 +204,16 @@ def mpc_fly_trajectory(
     if v_x is None:
         v_x = _variance_state_noise
 
-    x0 = simulator.x0
+    x0 = simulator.x0.cat.full()
     for k in range(N_iter):
         traj_setpoint = trajectory(mpc.t0).T
-        mpc_p_template['_p',0, 'pos_setpoint'] = traj_setpoint[:3] 
-        mpc_p_template['_p',0, 'yaw_setpoint'] = traj_setpoint[-1]
         sim_p_template['pos_setpoint'] = traj_setpoint[:3] 
         sim_p_template['yaw_setpoint'] = traj_setpoint[-1]
+        mpc_p_template['_p', 0, 'yaw_setpoint'] = traj_setpoint[-1]
+        x0[:3] = x0[:3]-traj_setpoint[:3]
+
         u0 = mpc.make_step(x0)
-        x0 = simulator.make_step(u0) + np.random.randn(12,1)*v_x
+        x0 = simulator.make_step(u0)
 
         for cb in callbacks:
             cb()

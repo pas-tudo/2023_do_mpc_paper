@@ -58,7 +58,7 @@ def get_circle(s: float, a:float, height:float) -> Trajectory:
     return tra
 
 
-def get_figure_eight(s: float, a:float, height:float) -> Trajectory:
+def get_figure_eight(s: float, a:float, height:float, rot:float = 0) -> Trajectory:
 
     tra = Trajectory()
 
@@ -66,35 +66,42 @@ def get_figure_eight(s: float, a:float, height:float) -> Trajectory:
     tra.f_y = a * sin(s*tra.t)*cos(s*tra.t)
     tra.f_z = DM(height)
 
+    f_x_new = (tra.f_x*np.cos(rot) - tra.f_y*np.sin(rot))
+    f_y_new = (tra.f_x*np.sin(rot) + tra.f_y*np.cos(rot))    
+
+    tra.f_x = f_x_new
+    tra.f_y = f_y_new
+
     return tra
 
-def get_wobbly_figure_eight(s: float, a:float, height:float, wobble:float) -> Trajectory:
+def get_wobbly_figure_eight(s: float, a:float, height:float, rot:float = 0, wobble:float = 0) -> Trajectory:
 
-    tra = Trajectory()
+    tra = get_figure_eight(s=s, a=a, height=height, rot=rot)
 
     wobble = min(wobble, height)
 
-    tra.f_x = a * sin(s*tra.t)
-    tra.f_y = a * sin(s*tra.t)*cos(s*tra.t)
     tra.f_z = wobble*cos(s*tra.t)+height
 
     return tra
 
 if __name__ == '__main__':
-    tra = get_figure_eight(1, 1, 1)
-    tra = get_circle(1, 1, 1)
+
+    tra_list = []
+    tra_list.append(get_figure_eight(1, 1, 1))
+    tra_list.append(get_figure_eight(1, 1, 1, rot=np.pi/2))
 
     t = np.linspace(0,4*np.pi, 100)
 
-    x = tra(t)
 
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(3,1)
 
-    ax[0].plot(x[:,0], x[:,1])
-    ax[1].plot(t, x[:,:3])
-    ax[2].plot(t, x[:,3])
+    for tra in tra_list:
+        x = tra(t)
+        ax[0].plot(x[:,0], x[:,1])
+        ax[1].plot(t, x[:,:3])
+        ax[2].plot(t, x[:,3])
 
     plt.show(block=True)
 

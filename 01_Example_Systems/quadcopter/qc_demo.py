@@ -47,7 +47,7 @@ mpc.set_initial_guess()
 
 # %%
 
-figure_eight_trajectory = qctrajectory.get_wobbly_figure_eight(s=1.5, a=1.5, height=1, wobble=0.2)
+figure_eight_trajectory = qctrajectory.get_wobbly_figure_eight(s=1, a=-1, height=1, wobble=0.2, rot=np.pi/2)
 
 if demonstrate_mpc:
     res_plot = plot_results.ResultPlot(qcconf, simulator.data, figsize=(12,8))

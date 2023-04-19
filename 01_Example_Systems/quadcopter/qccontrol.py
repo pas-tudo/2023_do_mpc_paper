@@ -118,9 +118,9 @@ def get_MPC(t_step: float, model: do_mpc.model.Model) -> Tuple[do_mpc.controller
 
 
     lterm = 0 
-    lterm += 10*sum1(model.x['pos']**2)# * qc.model.tvp['setpoint_weight', 0]
-    lterm += .01*sum1((model.x['dpos'])**2) #* model.tvp['setpoint_weight', 0]
-    lterm += .01*sum1((model.x['omega'])**2)# * model.tvp['setpoint_weight', 1]
+    lterm += 10*sum1((model.x['pos'])**2)
+    lterm += .01*sum1((model.x['dpos'])**2)
+    lterm += .01*sum1((model.x['omega'])**2)
     lterm += 0.1*sum1(sin(model.x['phi', 1:])**2)
     lterm += 1*(sin(model.x['phi',0]-model.p['yaw_setpoint'])**2)
 

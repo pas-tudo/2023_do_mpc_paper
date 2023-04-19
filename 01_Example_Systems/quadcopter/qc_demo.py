@@ -24,7 +24,7 @@ plt.ion()
 
 t_step = 0.05
 qcconf = qcmodel.QuadcopterConfig()
-simulator = qccontrol.get_simulator(t_step, qcmodel.get_model(qcconf, with_pos=True))
+simulator, sim_p_template = qccontrol.get_simulator(t_step, qcmodel.get_model(qcconf, with_pos=True))
 
 
 # %%
@@ -47,7 +47,7 @@ mpc.set_initial_guess()
 
 # %%
 
-figure_eight_trajectory = qctrajectory.get_figure_eight(s=1, a=1, height=1)
+figure_eight_trajectory = qctrajectory.get_wobbly_figure_eight(s=1, a=1, height=1, wobble=2)
 
 if demonstrate_mpc:
     res_plot = plot_results.ResultPlot(qcconf, simulator.data, figsize=(12,8))
@@ -55,4 +55,4 @@ if demonstrate_mpc:
     simulator.reset_history()
     mpc.reset_history()
 
-    qccontrol.mpc_fly_trajectory(simulator, mpc, mpc_p_template, N_iter=200, callbacks=[res_plot.draw], trajectory=figure_eight_trajectory)
+    qccontrol.mpc_fly_trajectory(simulator, mpc, mpc_p_template, sim_p_template, N_iter=200, callbacks=[res_plot.draw], trajectory=figure_eight_trajectory)

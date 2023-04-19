@@ -68,7 +68,17 @@ def get_figure_eight(s: float, a:float, height:float) -> Trajectory:
 
     return tra
 
+def get_wobbly_figure_eight(s: float, a:float, height:float, wobble:float) -> Trajectory:
 
+    tra = Trajectory()
+
+    wobble = min(wobble, height)
+
+    tra.f_x = a * sin(s*tra.t)
+    tra.f_y = a * sin(s*tra.t)*cos(s*tra.t)
+    tra.f_z = wobble*cos(s*tra.t)+height
+
+    return tra
 
 if __name__ == '__main__':
     tra = get_figure_eight(1, 1, 1)

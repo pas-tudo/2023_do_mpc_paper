@@ -25,6 +25,8 @@ class ResultPlot:
         self.ax.append(plt.subplot2grid((5,3), (4,2), colspan=1, rowspan=1, sharex=self.ax[0]))
 
         self.graphics.add_line(var_type='_x', var_name='pos', axis=self.ax[0])  
+        self.ax[0].set_prop_cycle(None)
+        self.graphics.add_line(var_type='_p', var_name='pos_setpoint', axis=self.ax[0], linestyle='--')  
         self.graphics.add_line(var_type='_x', var_name='dpos', axis=self.ax[1])  
         self.graphics.add_line(var_type='_x', var_name='phi', axis=self.ax[2])
         self.graphics.add_line(var_type='_x', var_name='omega', axis=self.ax[3])

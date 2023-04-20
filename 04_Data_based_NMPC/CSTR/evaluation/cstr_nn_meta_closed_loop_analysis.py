@@ -111,7 +111,7 @@ df_res.sort_values(by='C_b_set', inplace=True)
 
 # %%
 # of type scatter
-fig, ax = plt.subplots(2,1, figsize=(mplconfig.columnwidth, 1.2*mplconfig.columnwidth), dpi=160, sharex=True)
+fig, ax = plt.subplots(2,1, figsize=(mplconfig.columnwidth, 1.1*mplconfig.columnwidth), dpi=160, sharex=True)
 
 ax[0].plot(df_res['C_b_set'], df_res['exact_mpc_cost'], 'o', label='exact model', color='k', markerfacecolor='none')
 ax[0].plot(df_res['C_b_set'], df_res['nn_mpc_cost'], 'x', label='NN model', color='k')
@@ -127,11 +127,11 @@ ax[1].set_prop_cycle(None)
 ax[1].semilogy(df_res['C_b_set'], nn_mpc_cons_viol, 'x')
 
 ax[1].set_ylabel('max. constraint violation')
-ax[0].set_xlabel(r'$c_B^\text{set}$ [-]')
+ax[1].set_xlabel(r'$c_B^\text{set}$ [-]')
 ax[1].legend(loc='lower left', fontsize='small', ncols=2)
 
 fig.align_ylabels()
-fig.tight_layout(h_pad=0.5,  pad=0.)
+fig.tight_layout(pad=0.1)
 
 fig.savefig(os.path.join(plot_path, 'results', 'mpc_with_nn_vs_exact_model_meta.pgf'))
 

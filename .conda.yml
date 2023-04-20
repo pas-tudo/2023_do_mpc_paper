@@ -1,0 +1,21 @@
+name: env
+channels:
+  - default
+  - conda-forge
+dependencies:
+  - python=3.09
+  - casadi=3.5.5
+  - numpy
+  - scipy
+  - matplotlib
+  - pandas
+  - pip
+  - ipython
+  - jupyter
+  - pip:
+    - tensorflow
+    - onnx
+    - tf2onnx
+
+  # install locally with:
+  # conda env create --prefix .venv -f .conda.yml  

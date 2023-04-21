@@ -63,14 +63,15 @@ if __name__ ==  '__main__' :
     data_dir = os.path.join('.', 'closed_loop_mpc')
     pathlib.Path(data_dir).mkdir(parents=True, exist_ok=True)
 
-    sp.set_sampling_var('p0',   get_uniform_func(-3, 3))
-    sp.set_sampling_var('p1',   get_uniform_func(-3, 3))
-    sp.set_sampling_var('p2',   get_uniform_func(0, 3))
+    sp.set_sampling_var('p0',   get_uniform_func(-1.5, 1.5))
+    sp.set_sampling_var('p1',   get_uniform_func(-1.5, 1.5))
+    sp.set_sampling_var('p2',   get_uniform_func(0, 2))
     sp.set_sampling_var('yaw0',  get_uniform_func(-np.pi, np.pi))
     sp.set_sampling_var('speed',  get_uniform_func(0.2, 1.5))
     sp.set_sampling_var('radius',  get_uniform_func(0.2, 1.5))
-    sp.set_sampling_var('height',   get_uniform_func(0.2, 3))
-    sp.set_sampling_var('wobble_height',   get_uniform_func(0, 1))
+    sp.set_sampling_var('height',   get_uniform_func(0.2, 2))
+    sp.set_sampling_var('wobble_height',   get_uniform_func(0, 5))
+    sp.set_sampling_var('rot', get_uniform_func(-np.pi, np.pi))
 
     plan = sp.gen_sampling_plan(100)
     sp.export(os.path.join(data_dir, 'sampling_plan_mpc'))
@@ -95,11 +96,11 @@ pd.DataFrame(plan)
 # %% [code]
 t_step = 0.05
 qcconf = qcmodel.QuadcopterConfig()
-simulator = qccontrol.get_simulator(t_step, qcmodel.get_model(qcconf, with_pos=True))
+simulator, sim_p_template = qccontrol.get_simulator(t_step, qcmodel.get_model(qcconf, with_pos=True))
 mpc, mpc_p_template = qccontrol.get_MPC(t_step, qcmodel.get_model(qcconf, with_pos=True))
 
 def sampling_function(
-        p0, p1, p2, yaw0, speed, radius, height, wobble_height
+        p0, p1, p2, yaw0, speed, radius, height, wobble_height, rot
     ):
     simulator.reset_history()
 
@@ -108,16 +109,16 @@ def sampling_function(
     simulator.x0['pos', 2] = p2
     simulator.x0['phi', 0] = yaw0
 
-    figure_eight_trajectory = qctrajectory.get_wobbly_figure_eight(s=speed, a=radius, height=height, wobble=wobble_height)
+    figure_eight_trajectory = qctrajectory.get_wobbly_figure_eight(s=speed, a=radius, height=height, wobble=wobble_height, rot=rot)
 
 
     x0 = simulator.x0.cat.full()
 
     mpc.x0 = x0
 
-    qccontrol.mpc_fly_trajectory(simulator, mpc, mpc_p_template, N_iter=200, trajectory=figure_eight_trajectory)
+    qccontrol.mpc_fly_trajectory(simulator, mpc, mpc_p_template, sim_p_template, N_iter=200, trajectory=figure_eight_trajectory)
 
-    return simulator.data
+    return {'sim': simulator.data}
     
 # %% [markdown]
 """
@@ -143,17 +144,4 @@ if __name__ ==  '__main__' :
     else:
         with mp.Pool(processes=8) as pool:
             p = pool.map(sampler.sample_idx, list(range(sampler.n_samples)))
-# %%
-
-dh = do_mpc.sampling.DataHandler(plan)
-dh.data_dir = sampler.data_dir
-
-
-# %%
-fig = plt.figure()
-ax = fig.add_axes([0, 0, 1, 1], projection='3d')
-pos3d = dh[0][0]['res']['_x', 'pos']
-ax.plot(pos3d[:,0], pos3d[:,1], pos3d[:,2])
-
-
 # %%

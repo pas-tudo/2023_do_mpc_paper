@@ -66,15 +66,17 @@ if __name__ ==  '__main__' :
     sp.set_sampling_var('p0',   get_uniform_func(-1.5, 1.5))
     sp.set_sampling_var('p1',   get_uniform_func(-1.5, 1.5))
     sp.set_sampling_var('p2',   get_uniform_func(0, 2))
-    sp.set_sampling_var('yaw0',  get_uniform_func(-np.pi, np.pi))
+    sp.set_sampling_var('phi0',  get_uniform_func(-np.pi, np.pi))
+    sp.set_sampling_var('phi1',  get_uniform_func(-np.pi, np.pi))
+    sp.set_sampling_var('phi2',  get_uniform_func(-np.pi, np.pi))
     sp.set_sampling_var('speed',  get_uniform_func(0.2, 1.5))
     sp.set_sampling_var('radius',  get_uniform_func(0.2, 1.5))
     sp.set_sampling_var('height',   get_uniform_func(0.2, 2))
     sp.set_sampling_var('wobble_height',   get_uniform_func(0, 5))
     sp.set_sampling_var('rot', get_uniform_func(-np.pi, np.pi))
-    sp.set_sampling_var('input_noise_dist', get_uniform_func(0, 2e-3))
+    sp.set_sampling_var('input_noise_dist', get_uniform_func(0.5e-3, 2e-3))
 
-    plan = sp.gen_sampling_plan(200)
+    plan = sp.gen_sampling_plan(100)
     sp.export(os.path.join(data_dir, 'sampling_plan_mpc'))
 
 
@@ -98,7 +100,7 @@ simulator, sim_p_template = qccontrol.get_simulator(t_step, qcmodel.get_model(qc
 mpc, mpc_p_template = qccontrol.get_MPC(t_step, qcmodel.get_model(qcconf, with_pos=True))
 
 def sampling_function(
-        p0, p1, p2, yaw0, speed, radius, height, wobble_height, rot, input_noise_dist
+        p0, p1, p2, phi0, phi1, phi2, speed, radius, height, wobble_height, rot, input_noise_dist
     ):
     simulator.reset_history()
     mpc.reset_history()
@@ -106,7 +108,9 @@ def sampling_function(
     simulator.x0['pos', 0] = p0
     simulator.x0['pos', 1] = p1
     simulator.x0['pos', 2] = p2
-    simulator.x0['phi', 0] = yaw0
+    simulator.x0['phi', 0] = phi0
+    simulator.x0['phi', 1] = phi1
+    simulator.x0['phi', 2] = phi2
 
     figure_eight_trajectory = qctrajectory.get_wobbly_figure_eight(
         s=speed, 
@@ -126,7 +130,7 @@ def sampling_function(
         mpc, 
         mpc_p_template, 
         sim_p_template, 
-        N_iter=200, 
+        N_iter=100, 
         trajectory=figure_eight_trajectory,
         noise_dist=input_noise_dist
         )

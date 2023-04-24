@@ -88,31 +88,31 @@ if True:
     X_K = []
     U_K = []
     U_K_prev = []
-    P_k = []
+    # P_k = []
 
 
     for res_i in dh[:]:
-        dyaw =np.sin(res_i['res']['p_k'][:,[-1]] - res_i['res']['x_k'][:, [6]])
+        # dyaw =np.sin(res_i['res']['p_k'][:,[-1]] - res_i['res']['x_k'][:, [6]])
         X_K.append(res_i['res']['x_k'][1:,:])
         U_K.append(res_i['res']['u_k'][1:,:])
         U_K_prev.append(res_i['res']['u_k'][:-1,:])
         # P_k.append(res_i['res']['p_k'][1:,[-1]])
-        P_k.append(dyaw[1:,:])
+        # P_k.append(dyaw[1:,:])
 
     X_K = np.concatenate(X_K, axis=0)
     U_K = np.concatenate(U_K, axis=0)
     U_K_prev = np.concatenate(U_K_prev, axis=0)
-    P_K = np.concatenate(P_k, axis=0)
+    # P_K = np.concatenate(P_k, axis=0)
 
     data = pd.concat(
         [
             pd.DataFrame(X_K, columns=['dx0', 'dx1', 'dx2', 'v0', 'v1', 'v2', 'phi0', 'phi1', 'phi2', 'omega0', 'omega1', 'omega2']),
             pd.DataFrame(U_K, columns=['f0', 'f1', 'f2', 'f3']),
             pd.DataFrame(U_K_prev, columns=['f0', 'f1', 'f2', 'f3']),
-            pd.DataFrame(P_K, columns=['yaw_set']),
+            # pd.DataFrame(P_K, columns=['yaw_set']),
         ],
         axis=1,
-        keys=['x_k', 'u_k', 'u_k_prev', 'p_k']
+        keys=['x_k', 'u_k', 'u_k_prev']
     )
 
     # %% [markdown]

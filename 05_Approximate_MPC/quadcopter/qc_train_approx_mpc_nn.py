@@ -14,16 +14,38 @@ import os
 import sys
 from typing import Tuple
 
+# sys.path.append(os.path.join('..', '..' , '01_Example_Systems', 'quadcopter'))
+
+# import qccontrol
+# import qcmodel
 
 import importlib
 
 # %%
 
+
 data = pd.read_pickle(os.path.join('data_generation', 'qc_data_mpc.pkl'))
 
-within_max_dist_setpoint = np.linalg.norm(data['x_k'][['dx0', 'dx1', 'dx2']], axis=1) <= 1
 
-# data = data[within_max_dist_setpoint]
+# # %% 
+# # Augment data
+# qcconf = qcmodel.QuadcopterConfig()
+# model = qcmodel.get_model(qcconf, with_pos=True)
+# x_ss, u_ss = qcmodel.get_stable_point(model, p=1)
+
+# lb_aug = ub_aug = np.concatenate((x_ss, u_ss, np.zeros((4,1))), axis=0)
+
+# lb_aug[6] = -np.pi
+# ub_aug[6] = np.pi
+
+# lb_aug
+
+# data_aug = np.random.uniform(lb_aug.T, ub_aug.T, size=(1000,20))
+
+# data_aug = pd.DataFrame(data_aug, columns=data.columns)
+
+# data = pd.concat((data, data_aug), axis=0)
+
 
 # %%
 
@@ -39,6 +61,7 @@ data_train, data_test = train_test_split(data, test_fraction=0.2, random_state=4
 # %%
 # Sumamry of pandas dataframe
 data_train.describe()
+ # %%
 
 
 # %%
@@ -73,15 +96,13 @@ def get_model(
 
 
     # Model input
-    inputs = keras.Input(shape=(data[['x_k', 'u_k_prev', 'p_k']].shape[1]), name='inputs')
+    inputs = keras.Input(shape=(data[['x_k']].shape[1]), name='inputs')
     scale_inputs = keras.layers.Normalization()
-    scale_inputs.adapt(data[['x_k', 'u_k_prev', 'p_k']].to_numpy())
+    scale_inputs.adapt(data[['x_k']].to_numpy())
 
     # Out   
-    scale_outputs = keras.layers.Normalization()
-    scale_outputs.adapt(data['u_k'].to_numpy())
-    unscale_outputs = keras.layers.Normalization(invert=True)
-    unscale_outputs.adapt(data['u_k'].to_numpy())
+    scale_outputs = keras.layers.Normalization(mean=tf.constant(np.zeros((1,4))), variance=0.3*np.ones((1,4)))
+    unscale_outputs = keras.layers.Normalization(invert=True, mean=tf.constant(np.zeros((1,4))), variance=0.3*np.ones((1,4)))
 
     layer_in = scale_inputs(inputs)
     #layer_in = inputs
@@ -94,7 +115,7 @@ def get_model(
         )(layer_in)
 
     # Output layer
-    u_k_scaled = keras.layers.Dense(data['u_k'].shape[1])(layer_in)
+    u_k_scaled = keras.layers.Dense(data['u_k'].shape[1], activation='sigmoid')(layer_in)
 
     u_k_tf = unscale_outputs(u_k_scaled)
 
@@ -106,7 +127,7 @@ def get_model(
 
 
 # %%
-train_model, eval_model, scale_outputs = get_model(data_train, n_layer=6, n_neurons=80, activation='relu')
+train_model, eval_model, scale_outputs = get_model(data_train, n_layer=6, n_neurons=200, activation='tanh')
 
 
 # Prepare model for training
@@ -123,19 +144,19 @@ train_model.summary()
 early_stopping_callback = keras.callbacks.EarlyStopping(
     monitor='val_loss',
     min_delta=0.0001,
-    patience=100,
+    patience=50,
     verbose=1,
     mode='auto',
 )
 
 history = train_model.fit(
-    x=data_train[['x_k', 'u_k_prev', 'p_k']].to_numpy(),
+    x=data_train[['x_k']].to_numpy(),
     y=[scale_outputs(data_train['u_k'])],
     validation_data=(
-        data_test[['x_k', 'u_k_prev', 'p_k']].to_numpy(),
+        data_test[['x_k']].to_numpy(),
         [scale_outputs(data_test['u_k'])]
     ),
-    epochs=100,
+    epochs=500,
     batch_size=1024,
     callbacks=[early_stopping_callback],
 )
@@ -143,7 +164,7 @@ history = train_model.fit(
 # %%
 
 def plot_parity(data, ax, **kwargs):
-    pred = eval_model.predict(data[['x_k','u_k_prev','p_k']])
+    pred = eval_model.predict(data[['x_k']])
     true = data['u_k'].to_numpy()
     for k in range(4):
         i,j = k//2, k%2
@@ -169,16 +190,14 @@ eval_model.save(os.path.join('models', 'qc_approx_mpc_model'))
 loaded_model = keras.models.load_model(os.path.join('models', 'qc_approx_mpc_model'))
 
 # %%
-test_input = [np.zeros((1,17))]
+test_input = [np.zeros((1,16))]
 
 # %%
+loaded_model.layers[-1].invert = True
 loaded_model(test_input).numpy()
 # %%
 eval_model(test_input).numpy()
 
 # %%
-
-loaded_model.layers[1].invert = False
 # %%
-loaded_model.layers[-1].invert = True
 # %%

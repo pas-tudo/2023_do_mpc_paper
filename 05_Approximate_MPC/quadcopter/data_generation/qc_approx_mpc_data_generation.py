@@ -101,6 +101,7 @@ def sampling_function(
         p0, p1, p2, yaw0, speed, radius, height, wobble_height, rot, input_noise_dist
     ):
     simulator.reset_history()
+    mpc.reset_history()
 
     simulator.x0['pos', 0] = p0
     simulator.x0['pos', 1] = p1
@@ -133,7 +134,7 @@ def sampling_function(
     return {
         'x_k': mpc.data['_x'], 
         'u_k': mpc.data['_u'], 
-        'p_k': mpc.data['_p'], 
+        'p_k': simulator.data['_p'], 
         'success': mpc.data['success'], 
         'pos_k': simulator.data['_x', 'pos'],
         }

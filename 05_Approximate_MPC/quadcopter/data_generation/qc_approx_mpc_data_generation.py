@@ -72,13 +72,11 @@ if __name__ ==  '__main__' :
     sp.set_sampling_var('height',   get_uniform_func(0.2, 2))
     sp.set_sampling_var('wobble_height',   get_uniform_func(0, 5))
     sp.set_sampling_var('rot', get_uniform_func(-np.pi, np.pi))
+    sp.set_sampling_var('input_noise_dist', get_uniform_func(0, 2e-3))
 
-    plan = sp.gen_sampling_plan(100)
+    plan = sp.gen_sampling_plan(200)
     sp.export(os.path.join(data_dir, 'sampling_plan_mpc'))
 
-
-# %%
-pd.DataFrame(plan)
 
 
 # %% [markdown]
@@ -100,7 +98,7 @@ simulator, sim_p_template = qccontrol.get_simulator(t_step, qcmodel.get_model(qc
 mpc, mpc_p_template = qccontrol.get_MPC(t_step, qcmodel.get_model(qcconf, with_pos=True))
 
 def sampling_function(
-        p0, p1, p2, yaw0, speed, radius, height, wobble_height, rot
+        p0, p1, p2, yaw0, speed, radius, height, wobble_height, rot, input_noise_dist
     ):
     simulator.reset_history()
 
@@ -109,16 +107,36 @@ def sampling_function(
     simulator.x0['pos', 2] = p2
     simulator.x0['phi', 0] = yaw0
 
-    figure_eight_trajectory = qctrajectory.get_wobbly_figure_eight(s=speed, a=radius, height=height, wobble=wobble_height, rot=rot)
+    figure_eight_trajectory = qctrajectory.get_wobbly_figure_eight(
+        s=speed, 
+        a=radius, 
+        height=height, 
+        wobble=wobble_height, 
+        rot=rot, 
+        )
 
 
     x0 = simulator.x0.cat.full()
 
     mpc.x0 = x0
 
-    qccontrol.mpc_fly_trajectory(simulator, mpc, mpc_p_template, sim_p_template, N_iter=200, trajectory=figure_eight_trajectory)
+    qccontrol.mpc_fly_trajectory(
+        simulator, 
+        mpc, 
+        mpc_p_template, 
+        sim_p_template, 
+        N_iter=200, 
+        trajectory=figure_eight_trajectory,
+        noise_dist=input_noise_dist
+        )
 
-    return {'sim': simulator.data}
+    return {
+        'x_k': mpc.data['_x'], 
+        'u_k': mpc.data['_u'], 
+        'p_k': mpc.data['_p'], 
+        'success': mpc.data['success'], 
+        'pos_k': simulator.data['_x', 'pos'],
+        }
     
 # %% [markdown]
 """

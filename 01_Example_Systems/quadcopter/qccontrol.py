@@ -122,8 +122,8 @@ def get_MPC(t_step: float, model: do_mpc.model.Model) -> Tuple[do_mpc.controller
     lterm += 10*sum1((model.x['pos'])**2)
     lterm += .01*sum1((model.x['dpos'])**2)
     lterm += .01*sum1((model.x['omega'])**2)
-    lterm += 0.1*sum1(sin(model.x['phi', 1:])**2)
-    lterm += 1*(sin(model.x['phi',0]-model.p['yaw_setpoint'])**2)
+    lterm += 0.1*sum1((model.x['phi'])**2)
+    # lterm += 1*(model.x['phi',0]**2)
 
     mterm = lterm
     mpc.set_objective(lterm=lterm, mterm=mterm)

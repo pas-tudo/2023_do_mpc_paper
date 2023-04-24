@@ -15,6 +15,7 @@ from IPython.display import clear_output
 import copy
 import sys
 import importlib
+import time
 
 # Typing information
 from typing import Tuple, List, Dict, Union, Optional, Any, Callable
@@ -197,6 +198,7 @@ def mpc_fly_trajectory(
         v_x: Union[np.ndarray, float] = None,
         N_iter: Optional[int] = 200,
         callbacks: Optional[List[Callable]] = [],
+        noise_dist = 0.0,
         ) -> None:
 
     mpc_p_template['_p',0] = 0 # Reset all setpoints
@@ -213,7 +215,12 @@ def mpc_fly_trajectory(
         x0[:3] = x0[:3]-traj_setpoint[:3]
 
         u0 = mpc.make_step(x0)
+
+        u0 += np.random.uniform(-noise_dist, noise_dist, size=(4,1))
+
         x0 = simulator.make_step(u0)
 
         for cb in callbacks:
             cb()
+
+        time.sleep(.05)

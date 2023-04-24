@@ -6,6 +6,7 @@ import tensorflow as tf
 from tensorflow import keras
 import sys
 import os
+import time
 
 sys.path.append(os.path.join('..','..','01_Example_Systems','quadcopter'))
 
@@ -51,7 +52,7 @@ class ApproxMPC:
 
         self.x0 = x0
 
-        nn_in = np.concatenate((x0, self.u0, p[-1].reshape(-1,1)), axis=0).reshape(1,-1)
+        nn_in = np.concatenate((x0, self.u0), axis=0).reshape(1,-1)
 
         u0 = np.clip(self.keras_model([nn_in]).numpy().reshape(-1,1), 0, 0.3)
 
@@ -64,7 +65,7 @@ class ApproxMPC:
 ampc = ApproxMPC(keras_model)
 
 
-tracjectory = qctrajectory.get_wobbly_figure_eight(s=.5, a=1, height=.5, wobble=0., rot=0)
+tracjectory = qctrajectory.get_wobbly_figure_eight(s=1, a=1, height=.5, wobble=0.1, rot=0)
 
 res_plot = plot_results.ResultPlot(qcconf, simulator.data, figsize=(12,8))
 simulator.x0 = np.zeros((12,1))
@@ -83,3 +84,5 @@ for k in range(N_iter):
     x0 = simulator.make_step(u0)
 
     res_plot.draw()
+
+    time.sleep(0.05)

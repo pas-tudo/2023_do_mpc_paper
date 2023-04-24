@@ -106,7 +106,7 @@ def get_model(
 
 
 # %%
-train_model, eval_model, scale_outputs = get_model(data_train, n_layer=4, n_neurons=80, activation='relu')
+train_model, eval_model, scale_outputs = get_model(data_train, n_layer=6, n_neurons=80, activation='relu')
 
 
 # Prepare model for training
@@ -135,7 +135,7 @@ history = train_model.fit(
         data_test[['x_k', 'u_k_prev', 'p_k']].to_numpy(),
         [scale_outputs(data_test['u_k'])]
     ),
-    epochs=500,
+    epochs=100,
     batch_size=1024,
     callbacks=[early_stopping_callback],
 )

@@ -139,3 +139,5 @@ dmypy.json
 04_Data_based_NMPC/CSTR/evaluation/closed_loop_meta/
 
 05_Approximate_MPC/quadcopter/data_generation/closed_loop_mpc/
+
+05_Approximate_MPC/quadcopter/models/

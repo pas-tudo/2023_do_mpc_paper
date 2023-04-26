@@ -14,10 +14,10 @@ import os
 import sys
 from typing import Tuple
 
-# sys.path.append(os.path.join('..', '..' , '01_Example_Systems', 'quadcopter'))
+sys.path.append(os.path.join('..', '..' , '01_Example_Systems', 'quadcopter'))
 
-# import qccontrol
-# import qcmodel
+import qccontrol
+import qcmodel
 
 import importlib
 
@@ -29,9 +29,9 @@ data = pd.read_pickle(os.path.join('data_generation', 'qc_data_mpc.pkl'))
 
 # # %% 
 # # Augment data
-# qcconf = qcmodel.QuadcopterConfig()
-# model = qcmodel.get_model(qcconf, with_pos=True)
-# x_ss, u_ss = qcmodel.get_stable_point(model, p=1)
+qcconf = qcmodel.QuadcopterConfig()
+model = qcmodel.get_model(qcconf, with_pos=True)
+x_ss, u_ss = qcmodel.get_stable_point(model, p=1)
 
 # lb_aug = ub_aug = np.concatenate((x_ss, u_ss, np.zeros((4,1))), axis=0)
 
@@ -46,6 +46,9 @@ data = pd.read_pickle(os.path.join('data_generation', 'qc_data_mpc.pkl'))
 
 # data = pd.concat((data, data_aug), axis=0)
 
+del_pos_clip = (data['x_k'][['dx0', 'dx1', 'dx2']] < 0.5).all(axis=1)
+
+data = data[del_pos_clip]
 
 # %%
 
@@ -57,6 +60,10 @@ def train_test_split(data, test_fraction=0.2, **kwargs):
 
 # Train test split
 data_train, data_test = train_test_split(data, test_fraction=0.2, random_state=42)
+
+# Print information about data
+print(f'Train data: {data_train.shape}')
+print(f'Test data: {data_test.shape}')
 
 # %%
 # Sumamry of pandas dataframe
@@ -101,8 +108,8 @@ def get_model(
     scale_inputs.adapt(data[['x_k']].to_numpy())
 
     # Out   
-    scale_outputs = keras.layers.Normalization(mean=tf.constant(np.zeros((1,4))), variance=0.3*np.ones((1,4)))
-    unscale_outputs = keras.layers.Normalization(invert=True, mean=tf.constant(np.zeros((1,4))), variance=0.3*np.ones((1,4)))
+    scale_outputs = keras.layers.Normalization(mean=tf.constant(u_ss.reshape(1,-1)), variance=0.1*np.ones((1,4)))
+    unscale_outputs = keras.layers.Normalization(invert=True, mean=tf.constant(u_ss.reshape(1,-1)), variance=0.1*np.ones((1,4)))
 
     layer_in = scale_inputs(inputs)
     #layer_in = inputs
@@ -112,10 +119,11 @@ def get_model(
         layer_in = keras.layers.Dense(n_neurons, 
             activation=activation, 
             name=f'hidden_{k}',
+            activity_regularizer=keras.regularizers.L2(1e-3),
         )(layer_in)
 
     # Output layer
-    u_k_scaled = keras.layers.Dense(data['u_k'].shape[1], activation='sigmoid')(layer_in)
+    u_k_scaled = keras.layers.Dense(data['u_k'].shape[1], activation='linear')(layer_in)
 
     u_k_tf = unscale_outputs(u_k_scaled)
 
@@ -127,7 +135,7 @@ def get_model(
 
 
 # %%
-train_model, eval_model, scale_outputs = get_model(data_train, n_layer=6, n_neurons=200, activation='tanh')
+train_model, eval_model, scale_outputs = get_model(data_train, n_layer=6, n_neurons=100, activation='tanh')
 
 
 # Prepare model for training
@@ -185,7 +193,7 @@ ax[0,0].legend()
 # %%
 # Save model
 
-eval_model.save(os.path.join('models', 'qc_approx_mpc_model'))
+eval_model.save(os.path.join('models', '02_qc_approx_mpc_model'))
 # %%
 loaded_model = keras.models.load_model(os.path.join('models', 'qc_approx_mpc_model'))
 

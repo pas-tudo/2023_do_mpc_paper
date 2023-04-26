@@ -31,7 +31,7 @@ simulator, sim_p_template = qccontrol.get_simulator(t_step, qcmodel.get_model(qc
 # %%
 
 # Load keras model
-keras_model = keras.models.load_model(os.path.join('models','qc_approx_mpc_model'))
+keras_model = keras.models.load_model(os.path.join('models','02_qc_approx_mpc_model'))
 
 keras_model.layers[-1].invert = True
 
@@ -44,17 +44,22 @@ class ApproxMPC:
         self.n_u = 4
 
         self.x0 = np.zeros((self.n_x,1))
-        self.u0 = np.zeros((self.n_u,1))
+        self.u0 = np.ones((self.n_u,1))*.067
 
     def __call__(self, x0, p):
 
-        x0[:3] = x0[:3]-p[:3]
+        dp_max = np.array([.3,.3,.1]).reshape(-1,1)
+
+        x0[:3] = np.clip(x0[:3]-p[:3], -dp_max, dp_max)
+
+        # x0[6:9] = np.mod(x0[6:9], 2*np.pi) 
+
 
         self.x0 = x0
 
-        nn_in = np.concatenate((x0, self.u0), axis=0).reshape(1,-1)
+        nn_in = np.concatenate((x0), axis=0).reshape(1,-1)
 
-        u0 = np.clip(self.keras_model([nn_in]).numpy().reshape(-1,1), 0, 0.3)
+        u0 = self.keras_model([nn_in]).numpy().reshape(-1,1)
 
 
         self.u0 = u0
@@ -65,7 +70,7 @@ class ApproxMPC:
 ampc = ApproxMPC(keras_model)
 
 
-tracjectory = qctrajectory.get_wobbly_figure_eight(s=1, a=1, height=.5, wobble=0.1, rot=0)
+tracjectory = qctrajectory.get_wobbly_figure_eight(s=1, a=1, height=1, wobble=0, rot=0)
 
 res_plot = plot_results.ResultPlot(qcconf, simulator.data, figsize=(12,8))
 simulator.x0 = np.zeros((12,1))
@@ -73,16 +78,22 @@ simulator.reset_history()
 
 x0 = simulator.x0.cat.full()
 
-N_iter = 200
+N_iter = 400
 
 for k in range(N_iter):
     traj_setpoint = tracjectory(simulator.t0).T
     sim_p_template['pos_setpoint'] = traj_setpoint[:3] 
-    sim_p_template['yaw_setpoint'] = traj_setpoint[-1]
+    # sim_p_template['yaw_setpoint'] = traj_setpoint[-1]
 
     u0 = ampc(x0, traj_setpoint)
     x0 = simulator.make_step(u0)
 
-    res_plot.draw()
+    if k % 10 == 0:
+        res_plot.draw()
 
-    time.sleep(0.05)
+    if np.any(x0 > 10):
+        break
+
+    time.sleep(0.01)
+
+plt.show(block=True)

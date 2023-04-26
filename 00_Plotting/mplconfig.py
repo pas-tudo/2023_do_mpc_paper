@@ -19,7 +19,7 @@ golden_ratio = 1.618
 
 colors = mpl.rcParams['axes.prop_cycle'].by_key()['color']
 boxprops = dict(boxstyle='round', facecolor='white', alpha=0.5, pad = .4)
-fontsize = 10
+fontsize = 8
 
 
 def config_mpl(tex_file = 'notation.tex'):

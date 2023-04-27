@@ -4,7 +4,7 @@ channels:
   - conda-forge
 dependencies:
   - python=3.9
-  - casadi=3.5.5
+  - casadi=3.6.*
   - numpy
   - scipy
   - matplotlib
@@ -12,11 +12,16 @@ dependencies:
   - pip
   - ipython
   - jupyter
+  - conda-build
   - pip:
     - tensorflow
     - onnx
     - tf2onnx
-    - do-mpc
 
   # install locally with:
-  # conda env create --prefix .venv -f .conda.yml  
+  # conda env create --prefix ./.conda -f .conda_environment.yml  
+
+  # Activate envornment with:
+  # conda activate ./.conda
+  # Add do-mpc:
+  # conda develop /PATH/TO/do-mpc

@@ -59,7 +59,10 @@ dh.data_dir = os.path.join(data_dir, '')
 #     lambda res: res['_u']
 # )
 
-results_with_success = dh.filter(output_filter = lambda res: np.all(res['success']))
+results_with_success = dh.filter(output_filter = lambda res: res is not None)
+
+# %%
+
 
 # %% [markdown]
 # Stack the results of all trajectories into a single array and create a `pandas` dataframe.
@@ -88,31 +91,40 @@ if True:
     X_K = []
     U_K = []
     U_K_prev = []
-    # P_k = []
+    dUdX0 = []
+    dUdU0_prev = []
 
 
-    for res_i in dh[:]:
+    for res_i in results_with_success:
         # dyaw =np.sin(res_i['res']['p_k'][:,[-1]] - res_i['res']['x_k'][:, [6]])
         X_K.append(res_i['res']['x_k'][1:,:])
         U_K.append(res_i['res']['u_k'][1:,:])
         U_K_prev.append(res_i['res']['u_k'][:-1,:])
         # P_k.append(res_i['res']['p_k'][1:,[-1]])
         # P_k.append(dyaw[1:,:])
+        dUdX0.append(res_i['res']['du0dx0'][1:])
+        dUdU0_prev.append(res_i['res']['du0du0_prev'][1:])
 
     X_K = np.concatenate(X_K, axis=0)
     U_K = np.concatenate(U_K, axis=0)
     U_K_prev = np.concatenate(U_K_prev, axis=0)
+    dUdX0 = np.concatenate(dUdX0, axis=0)
+    dUdU0_prev = np.concatenate(dUdU0_prev, axis=0)
     # P_K = np.concatenate(P_k, axis=0)
+
+    dUdX0 = [v for v in dUdX0]
+    dUdU0_prev = [v for v in dUdU0_prev]
 
     data = pd.concat(
         [
             pd.DataFrame(X_K, columns=['dx0', 'dx1', 'dx2', 'v0', 'v1', 'v2', 'phi0', 'phi1', 'phi2', 'omega0', 'omega1', 'omega2']),
             pd.DataFrame(U_K, columns=['f0', 'f1', 'f2', 'f3']),
             pd.DataFrame(U_K_prev, columns=['f0', 'f1', 'f2', 'f3']),
-            # pd.DataFrame(P_K, columns=['yaw_set']),
+            pd.DataFrame({'du0dx0': dUdX0}),
+            pd.DataFrame({'dUdU0_prev': dUdU0_prev}),
         ],
         axis=1,
-        keys=['x_k', 'u_k', 'u_k_prev']
+        keys=['x_k', 'u_k', 'u_k_prev', 'du0dx0', 'du0du0_prev']
     )
 
     # %% [markdown]

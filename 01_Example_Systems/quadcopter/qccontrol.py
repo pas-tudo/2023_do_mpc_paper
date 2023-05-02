@@ -121,13 +121,13 @@ def get_MPC(t_step: float, model: do_mpc.model.Model) -> Tuple[do_mpc.controller
     lterm = 0 
     lterm += 10*sum1((model.x['pos'])**2)
     lterm += .01*sum1((model.x['dpos'])**2)
-    lterm += .01*sum1((model.x['omega'])**2)
+    lterm += .05*sum1((model.x['omega'])**2)
     lterm += 0.1*sum1((model.x['phi'])**2)
     # lterm += 1*(model.x['phi',0]**2)
 
     mterm = lterm
     mpc.set_objective(lterm=lterm, mterm=mterm)
-    mpc.set_rterm(thrust=0.1)
+    mpc.set_rterm(thrust=5)
 
     mpc.bounds['lower','_u','thrust'] = 0
     mpc.bounds['upper','_u','thrust'] = 0.3

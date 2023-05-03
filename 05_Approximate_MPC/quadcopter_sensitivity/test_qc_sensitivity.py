@@ -27,7 +27,7 @@ plt.ion()
 
 # %%
 
-t_step = 0.02
+t_step = 0.04
 qcconf = qcmodel.QuadcopterConfig()
 simulator, sim_p_template = qccontrol.get_simulator(t_step, qcmodel.get_model(qcconf, with_pos=True))
 
@@ -44,7 +44,7 @@ t2 = do_mpc.tools.Timer()
 trajectory = qctrajectory.get_wobbly_figure_eight(s=1.5, a=-1.5, height=1, wobble=0.2, rot=np.pi/2)
 
 
-simulator.x0['pos'] = np.random.uniform(np.array([-2, -2, 0.]), np.array([2, 2, 1.5]))
+simulator.x0['pos'] = np.random.uniform(np.array([-1, -1, 0.5]), np.array([1, 1, 1.5]))
 simulator.x0['phi'] = np.random.uniform(-np.pi/8*np.ones(3), np.pi/8*np.ones(3))
 simulator.reset_history()
 mpc.reset_history()
@@ -56,15 +56,17 @@ class ASMPC:
         self.nlp_diff.settings.check_LICQ = True
         self.nlp_diff.settings.check_rank = False
         self.nlp_diff.settings.check_SC = True
-        print(asmpc.nlp_diff.status)
         self.nlp_diff.settings.solver ='casadi'
 
         self._u_data = [mpc.u0.cat.full().reshape(-1,1)]
+        self._licq = []
 
     def make_step(self, x0):
         x0 = x0.reshape(-1,1)
 
         self.nlp_diff.differentiate()
+
+        self._licq.append(self.nlp_diff.status.LICQ)
 
 
         x_prev = self.mpc.x0.cat.full().reshape(-1,1)
@@ -88,6 +90,10 @@ class ASMPC:
     @property
     def u_data(self):
         return np.hstack(self._u_data)
+    
+    @property
+    def licq(self):
+         return np.array(self._licq)
 
 
 
@@ -96,7 +102,7 @@ asmpc = ASMPC(mpc)
 
 
 x0 = simulator.x0.cat.full()
-for k in range(100):
+for k in range(50):
         print(k, end='\r')
         traj_setpoint = trajectory(mpc.t0).T
         sim_p_template['pos_setpoint'] = traj_setpoint[:3] 
@@ -106,26 +112,32 @@ for k in range(100):
 
         if k > 0:
             asmpc.make_step(x0)
-            print(asmpc.nlp_diff.status)
         t1.tic()
         u0 = mpc.make_step(x0)
         t1.toc()
+
+        u0 += np.random.uniform(np.zeros(4), np.ones(4)*2e-3).reshape(-1,1)
+        u0 = np.clip(u0, np.zeros((4,1)), 0.3*np.ones((4,1)))
+
         x0 = simulator.make_step(u0)
-        t2.tic()
-        nlp_diff.differentiate()
-        t2.toc()
 # %%
 t1.info()
-t2.info()
 
 
 # %%
-fig, ax = plt.subplots(4,1)
+fig, ax = plt.subplots(5,1)
 
 for k in range(4):
     ax[k].plot(asmpc.u_data[k], '-x', label="approx")
     ax[k].plot(mpc.data['_u'][:,k], '-x', label="mpc")
+
+ax[0].plot(asmpc.licq, '-o', label='licq')
+ax[0].plot(mpc.data['success'], '-x', label='success')
 ax[0].legend()
+
+ax[-1].plot(simulator.data['_x', 'pos'])
+ax[-1].set_prop_cycle(None)
+ax[-1].plot(simulator.data['_p', 'pos_setpoint'], '--')
 
 plt.show(block=True)
 # %%

@@ -63,20 +63,16 @@ if __name__ ==  '__main__' :
     data_dir = os.path.join('.', 'closed_loop_mpc')
     pathlib.Path(data_dir).mkdir(parents=True, exist_ok=True)
 
-    sp.set_sampling_var('p0',   get_uniform_func(-1, 1))
-    sp.set_sampling_var('p1',   get_uniform_func(-1, 1))
-    sp.set_sampling_var('p2',   get_uniform_func(0, 1))
     sp.set_sampling_var('phi0',  get_uniform_func(-np.pi/8, np.pi/8))
     sp.set_sampling_var('phi1',  get_uniform_func(-np.pi/8, np.pi/8))
     sp.set_sampling_var('phi2',  get_uniform_func(-np.pi/8, np.pi/8))
-    sp.set_sampling_var('speed',  get_uniform_func(0.2, 1.))
-    sp.set_sampling_var('radius',  get_uniform_func(0.2, 1.))
-    sp.set_sampling_var('height',   get_uniform_func(0.2, 2))
-    sp.set_sampling_var('wobble_height',   get_uniform_func(0, 0.5))
+    sp.set_sampling_var('speed',  get_uniform_func(0.2, 1.5))
+    sp.set_sampling_var('radius',  get_uniform_func(0.2, 1.5))
+    sp.set_sampling_var('wobble_height',   get_uniform_func(0, 1.5))
     sp.set_sampling_var('rot', get_uniform_func(-np.pi, np.pi))
-    sp.set_sampling_var('input_noise_dist', get_uniform_func(0.5e-3, 2e-3))
+    sp.set_sampling_var('input_noise_dist', get_uniform_func(0.5e-3, 5e-3))
 
-    plan = sp.gen_sampling_plan(100)
+    plan = sp.gen_sampling_plan(8)
     sp.export(os.path.join(data_dir, 'sampling_plan_mpc'))
 
 
@@ -94,12 +90,12 @@ if __name__ ==  '__main__' :
 
 
 # %% [code]
-t_step = 0.02
+t_step = 0.04
 qcconf = qcmodel.QuadcopterConfig()
 simulator, sim_p_template = qccontrol.get_simulator(t_step, qcmodel.get_model(qcconf, with_pos=True))
 mpc, mpc_p_template = qccontrol.get_MPC(t_step, qcmodel.get_model(qcconf, with_pos=True))
 nlp_diff = do_mpc.differentiator.DoMPCDifferentiatior(mpc)
-nlp_diff.settings.check_LICQ = False
+nlp_diff.settings.check_LICQ = True
 nlp_diff.settings.check_SC = False
 nlp_diff.settings.check_rank = False
 
@@ -112,6 +108,7 @@ class SensitivityData:
     def reset_history(self):
         self._du0dx0_arr = []
         self._du0du0_prev_arr = []
+        self._licq_arr = []
 
     def make_step(self):
         self.nlp_diff.differentiate()
@@ -121,6 +118,7 @@ class SensitivityData:
 
         self._du0dx0_arr.append(du0dx0)
         self._du0du0_prev_arr.append(du0du_prev)
+        self._licq_arr.append(nlp_diff.status.LICQ)
 
     @property
     def du0dx0(self):
@@ -129,57 +127,60 @@ class SensitivityData:
     @property
     def du0du0_prev(self):
         return np.stack(self._du0du0_prev_arr, axis=0)
+    
+    @property
+    def licq(self):
+        return np.array(self._licq_arr).reshape(-1,1)
 
 sens_data = SensitivityData(nlp_diff)
 
 def sampling_function(
-        p0, p1, p2, phi0, phi1, phi2, speed, radius, height, wobble_height, rot, input_noise_dist
+        phi0, phi1, phi2, speed, radius, wobble_height, rot, input_noise_dist
     ):
-    simulator.reset_history()
-    mpc.reset_history()
-    sens_data.reset_history()
-
-    simulator.x0['pos', 0] = p0
-    simulator.x0['pos', 1] = p1
-    simulator.x0['pos', 2] = p2
-    simulator.x0['phi', 0] = phi0
-    simulator.x0['phi', 1] = phi1
-    simulator.x0['phi', 2] = phi2
-
 
     figure_eight_trajectory = qctrajectory.get_wobbly_figure_eight(
         s=speed, 
         a=radius, 
-        height=height, 
+        height=0, 
         wobble=wobble_height, 
         rot=rot, 
         )
 
+    simulator.reset_history()
+    mpc.reset_history()
+    sens_data.reset_history()
+
+    simulator.x0['pos'] = figure_eight_trajectory(0).T[:3]
+    simulator.x0['phi', 0] = phi0
+    simulator.x0['phi', 1] = phi1
+    simulator.x0['phi', 2] = phi2
 
     x0 = simulator.x0.cat.full()
 
     mpc.x0 = x0
-
 
     qccontrol.mpc_fly_trajectory(
         simulator, 
         mpc, 
         mpc_p_template, 
         sim_p_template, 
-        N_iter=100, 
+        N_iter=200, 
         trajectory=figure_eight_trajectory,
         noise_dist=input_noise_dist,
         callbacks = [sens_data.make_step]
         )
 
     return {
+        'time': mpc.data['_time'],
         'x_k': mpc.data['_x'], 
         'u_k': mpc.data['_u'], 
         'p_k': simulator.data['_p'], 
+        'u_k_sim': simulator.data['_u'],
         'du0dx0': sens_data.du0dx0,
         'du0du0_prev': sens_data.du0du0_prev,
         'success': mpc.data['success'], 
         'pos_k': simulator.data['_x', 'pos'],
+        'nlp_licq': sens_data.licq,
         }
     
 # %% [markdown]

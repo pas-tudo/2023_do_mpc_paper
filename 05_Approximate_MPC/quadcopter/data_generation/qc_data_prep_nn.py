@@ -62,6 +62,14 @@ dh.data_dir = os.path.join(data_dir, '')
 results_with_success = dh.filter(output_filter = lambda res: res is not None)
 
 # %%
+if True:
+    print('Optimizer success in for all samples of case:')
+    for i, res in enumerate(results_with_success):
+        print('Case {}: {}'.format(i,np.all(res['res']['success'])))
+
+    print('LICQ satisfied in for all samples of case (None means not tested):')
+    for i, res in enumerate(results_with_success):
+        print('Case {}: {}'.format(i,np.all(res['res']['nlp_licq'])))
 
 
 # %% [markdown]
@@ -82,8 +90,22 @@ if False:
         plt.show()
         plt.pause(0.5)
 
+if False:
+    n_traj = 10
+    fig, ax = plt.subplots(n_traj, sharex=True)
 
+    for i, dh_i in enumerate(results_with_success[:n_traj]):
+        ax[i].plot(dh_i['res']['pos_k'][:,0])
+        ax[i].plot(dh_i['res']['pos_k'][:,1])
+        ax[i].plot(dh_i['res']['pos_k'][:,2])
 
+        ax[i].set_prop_cycle(None)
+
+        ax[i].plot(dh_i['res']['p_k'][:,0], '--')
+        ax[i].plot(dh_i['res']['p_k'][:,1], '--')
+        ax[i].plot(dh_i['res']['p_k'][:,2], '--')
+    
+    plt.show(block=True)
 
 
 # %%

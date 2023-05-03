@@ -33,19 +33,6 @@ qcconf = qcmodel.QuadcopterConfig()
 model = qcmodel.get_model(qcconf, with_pos=True)
 x_ss, u_ss = qcmodel.get_stable_point(model, p=1)
 
-# lb_aug = ub_aug = np.concatenate((x_ss, u_ss, np.zeros((4,1))), axis=0)
-
-# lb_aug[6] = -np.pi
-# ub_aug[6] = np.pi
-
-# lb_aug
-
-# data_aug = np.random.uniform(lb_aug.T, ub_aug.T, size=(1000,20))
-
-# data_aug = pd.DataFrame(data_aug, columns=data.columns)
-
-# data = pd.concat((data, data_aug), axis=0)
-
 del_pos_clip = (data['x_k'][['dx0', 'dx1', 'dx2']] < 0.5).all(axis=1)
 
 data = data[del_pos_clip]
@@ -68,7 +55,6 @@ print(f'Test data: {data_test.shape}')
 # %%
 # Sumamry of pandas dataframe
 data_train.describe()
- # %%
 
 
 # %%
@@ -119,7 +105,7 @@ def get_model(
         layer_in = keras.layers.Dense(n_neurons, 
             activation=activation, 
             name=f'hidden_{k}',
-            activity_regularizer=keras.regularizers.L2(1e-3),
+            # activity_regularizer=keras.regularizers.L2(1e-3),
         )(layer_in)
 
     # Output layer
@@ -135,7 +121,7 @@ def get_model(
 
 
 # %%
-train_model, eval_model, scale_outputs = get_model(data_train, n_layer=6, n_neurons=100, activation='tanh')
+train_model, eval_model, scale_outputs = get_model(data_train, n_layer=3, n_neurons=80, activation='tanh')
 
 
 # Prepare model for training
@@ -165,8 +151,8 @@ history = train_model.fit(
         [scale_outputs(data_test['u_k'])]
     ),
     epochs=500,
-    batch_size=1024,
-    callbacks=[early_stopping_callback],
+    batch_size=10000,
+    # callbacks=[early_stopping_callback],
 )
 
 # %%

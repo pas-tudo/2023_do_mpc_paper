@@ -33,19 +33,6 @@ qcconf = qcmodel.QuadcopterConfig()
 model = qcmodel.get_model(qcconf, with_pos=True)
 x_ss, u_ss = qcmodel.get_stable_point(model, p=1)
 
-# lb_aug = ub_aug = np.concatenate((x_ss, u_ss, np.zeros((4,1))), axis=0)
-
-# lb_aug[6] = -np.pi
-# ub_aug[6] = np.pi
-
-# lb_aug
-
-# data_aug = np.random.uniform(lb_aug.T, ub_aug.T, size=(1000,20))
-
-# data_aug = pd.DataFrame(data_aug, columns=data.columns)
-
-# data = pd.concat((data, data_aug), axis=0)
-
 del_pos_clip = (data['x_k'][['dx0', 'dx1', 'dx2']] < 0.5).all(axis=1)
 
 data = data[del_pos_clip]
@@ -59,7 +46,7 @@ def train_test_split(data, test_fraction=0.2, **kwargs):
     return data_train, data_test
 
 # Train test split
-data_train, data_test = train_test_split(data, test_fraction=0.8, random_state=42)
+data_train, data_test = train_test_split(data, test_fraction=0.2, random_state=42)
 
 # Print information about data
 print(f'Train data: {data_train.shape}')
@@ -74,7 +61,17 @@ tf_data = tf.data.Dataset.from_tensor_slices((
     np.stack(data_train['du0du0_prev']['dUdU0_prev']).astype(np.float32),
     ))
 
-tf_data = tf_data.shuffle(1000).batch(512)
+tf_data = tf_data.shuffle(1000).batch(2000)
+
+# %%
+# Get first batch of tf_data
+for x_k, u_k_prev, u_k, du0dx0, du0du0_prev in tf_data.take(1):
+    print(x_k.shape)
+    print(u_k_prev.shape)
+    print(u_k.shape)
+    print(du0dx0.shape)
+    print(du0du0_prev.shape)
+
 
 # %%
 
@@ -118,8 +115,8 @@ def get_model(
     scale_outputs = keras.layers.Normalization(mean=tf.constant(u_ss.reshape(1,-1)), variance=0.1*np.ones((1,4)))
     unscale_outputs = keras.layers.Normalization(invert=True, mean=tf.constant(u_ss.reshape(1,-1)), variance=0.1*np.ones((1,4)))
 
-    layer_in = scale_inputs(inputs)
-    #layer_in = inputs
+    # layer_in = scale_inputs(inputs)
+    layer_in = inputs
 
     # Hidden layers
     for k in range(n_layer):
@@ -140,12 +137,11 @@ def get_model(
     return model
 
 # %%
-model = get_model(data_train, n_layer=4, n_neurons=80, activation='relu')
+model = get_model(data_train, n_layer=1, n_neurons=80, activation='tanh')
 
 # %%
-
 @tf.function
-def train_step(x1, x2,  y, dydx1, dydx2, model, optimizer):
+def sobolov_train_step(x1, x2,  y, dydx1, dydx2, model, optimizer):
     with tf.GradientTape(persistent=True) as t1:
         with tf.GradientTape(persistent=True) as t2:
             y_pred = model((x1, x2))
@@ -158,28 +154,46 @@ def train_step(x1, x2,  y, dydx1, dydx2, model, optimizer):
         loss22 = tf.reduce_mean((dydx2-dydx2_pred)**2)
         loss2 = loss21 + loss22
 
-        loss = loss1 + 5*loss2
+        loss = loss1 + 100*loss2
 
     gradients = t1.gradient(loss, model.trainable_variables)
     optimizer.apply_gradients(zip(gradients, model.trainable_variables))
-    return loss, loss1, loss2, dydx1_pred
+    return loss, loss1, loss2, dydx1_pred, dydx2_pred
+
+@tf.function
+def train_step(x1, x2,  y, model, optimizer):
+    with tf.GradientTape(persistent=True) as t1:
+        y_pred = model((x1, x2))
+        
+
+        loss = tf.reduce_mean((y-y_pred)**2)
+
+    gradients = t1.gradient(loss, model.trainable_variables)
+    optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+    return loss
 
 def print_progress(epoch, loss, mse):
     print(f'Epoch: {epoch:4d}, Loss: {loss:.4e}, mse: {mse:.4e}', end='\r')
 
 # %%
 
-optimizer=keras.optimizers.Adam(learning_rate=0.0001)
+optimizer=keras.optimizers.Adam(learning_rate=0.001)
 
+sobolov = False
 
-for k in range(1000):
+for k in range(5000):
     for step, (x1, x2, y, dydx1, dydx2) in enumerate(tf_data):
-        loss, loss1, loss2, dydx_pred = train_step(x1,x2, y, dydx1, dydx2, model, optimizer)
-        print_progress(k, loss, loss1)
+        x1 = tf.Variable(x1)
+        x2 = tf.Variable(x2)
+        if sobolov:
+            loss, loss1, loss2, dydx1_pred, dydx2_pred = train_step(x1,x2, y, dydx1, dydx2, model, optimizer)
+            print_progress(k, loss, loss1)        
+        else:
+            loss = train_step(x1,x2, y, model, optimizer)
+            print_progress(k, loss, loss)
 
+        
 
-# %%
-model((x1,x2))
 
 # %%
 
@@ -197,6 +211,7 @@ plot_parity(data_test, ax, alpha=0.5, marker='x', linestyle='None', label='test'
 plot_parity(data_train,ax, alpha=0.5, marker='x', linestyle='None', label='train')
 ax[0,0].legend()
 
+
 # %% [markdown]
 """
 ## Export model with Keras
@@ -205,18 +220,18 @@ ax[0,0].legend()
 # %%
 # Save model
 
-eval_model.save(os.path.join('models', '02_qc_approx_mpc_model'))
+model.save(os.path.join('models', '04_qc_approx_mpc_model'))
 # %%
-loaded_model = keras.models.load_model(os.path.join('models', 'qc_approx_mpc_model'))
+loaded_model = keras.models.load_model(os.path.join('models', '04_qc_approx_mpc_model'))
 
 # %%
-test_input = [np.zeros((1,16))]
+test_input = (np.zeros((1,12)), np.zeros((1,4)))
 
 # %%
 loaded_model.layers[-1].invert = True
 loaded_model(test_input).numpy()
 # %%
-eval_model(test_input).numpy()
+model(test_input).numpy()
 
 # %%
 # %%

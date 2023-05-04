@@ -78,8 +78,6 @@ def get_wobbly_figure_eight(s: float, a:float, height:float, rot:float = 0, wobb
 
     tra = get_figure_eight(s=s, a=a, height=height, rot=rot)
 
-    wobble = min(wobble, height)
-
     tra.f_z = wobble*cos(s*tra.t)+height
 
     return tra

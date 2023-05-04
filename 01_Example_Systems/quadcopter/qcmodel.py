@@ -100,6 +100,9 @@ def get_model(conf: QuadcopterConfig, with_pos:bool = True, process_noise:bool=F
     dphi = model.set_expression('dphi', R@omega) # angular velocity in inertial frame
     domega = np.linalg.inv(conf.J)@(conf.D@f-cross(omega,conf.J@omega)) # angular acceleration in body frame
 
+    # Expression
+    model.set_expression('del_setpoint', sqrt(sum1(pos_setpoint - pos)**2))
+
 
     # Set all RHS
     model.set_rhs('pos', dpos, process_noise=process_noise)

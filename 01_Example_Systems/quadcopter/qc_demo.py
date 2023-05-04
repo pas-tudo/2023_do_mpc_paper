@@ -43,7 +43,6 @@ mpc.reset_history()
 qccontrol.mpc_fly_trajectory(
     simulator, 
     mpc, 
-    mpc_p_template,
     sim_p_template, 
     N_iter=300, 
     callbacks=[res_plot.draw], 

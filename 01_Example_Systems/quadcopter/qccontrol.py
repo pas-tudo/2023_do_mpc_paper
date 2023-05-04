@@ -191,8 +191,7 @@ def mpc_flyto(
 
 def mpc_fly_trajectory(
         simulator: do_mpc.simulator.Simulator,
-        mpc: do_mpc.controller.MPC,
-        mpc_p_template: Any,
+        controller: Any,  
         sim_p_template: Any,
         trajectory: Trajectory,
         v_x: Union[np.ndarray, float] = None,
@@ -201,20 +200,17 @@ def mpc_fly_trajectory(
         noise_dist = 0.0,
         ) -> None:
 
-    mpc_p_template['_p',0] = 0 # Reset all setpoints
-
     if v_x is None:
         v_x = _variance_state_noise
 
     x0 = simulator.x0.cat.full()
     for k in range(N_iter):
-        traj_setpoint = trajectory(mpc.t0).T
+        traj_setpoint = trajectory(simulator.t0).T
         sim_p_template['pos_setpoint'] = traj_setpoint[:3] 
         sim_p_template['yaw_setpoint'] = traj_setpoint[-1]
-        mpc_p_template['_p', 0, 'yaw_setpoint'] = traj_setpoint[-1]
         x0[:3] = x0[:3]-traj_setpoint[:3]
 
-        u0 = mpc.make_step(x0)
+        u0 = controller.make_step(x0)
 
         u0 += np.random.uniform(-noise_dist, noise_dist, size=(4,1))
 
@@ -223,4 +219,7 @@ def mpc_fly_trajectory(
         for cb in callbacks:
             cb()
 
-        time.sleep(.05)
+        if np.any(simulator.x0.cat.full()>50):
+            break
+
+        time.sleep(.04)

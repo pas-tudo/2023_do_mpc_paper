@@ -9,6 +9,7 @@ import tensorflow as tf
 from tensorflow import keras
 import pandas as pd
 from casadi import *
+import do_mpc
 
 import os
 import sys
@@ -16,7 +17,9 @@ from typing import Tuple
 
 sys.path.append(os.path.join('..', '..' , '01_Example_Systems', 'quadcopter'))
 
+sys.path.append(os.path.join('.','data_generation', '.'))
 
+from qc_data_prep import get_data_for_approx_mpc
 from qc_approx_helper import get_model
 
 # %% [markdown]
@@ -58,7 +61,8 @@ def print_progress(epoch: int, **kwargs):
     print_str = f'Epoch {epoch:4d}: '
 
     for key, value in kwargs.items():
-        print_str += f'{key} : {value:.3e}, '
+        if value is not None:
+            print_str += f'{key} : {value:.3e}, '
 
     print(print_str, end='\r')
 
@@ -107,32 +111,82 @@ class CustomTrainer:
         self.optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
 
         return loss
+    
+    @tf.function
+    def mse(self, x1, x2, y):
+        y_pred = self.model((x1,x2))
+        return tf.reduce_mean((y-y_pred)**2)
 
-    def fit(self, data_train, val = None, epochs = 10):
+    def fit(self, data_train, val = None, epochs = 10, callbacks=[]):
         if not self.is_traing_setup:
             raise Exception('Training not setup. Run setup_training() first.')
+        
+        callback_list = tf.keras.callbacks.CallbackList(callbacks, add_history=True, model=self.model)
+        logs = {}
 
+        callback_list.on_train_begin(logs=logs)
         for k in range(epochs):
-            for step, (x1, x2, y, dydx1, dydx2) in enumerate(data_train):
+            callback_list.on_epoch_begin(k, logs=logs)
+            if val is not None:
+                for batch, (x1_val, x2_val, y_val, _, _) in enumerate(val):
+                    callback_list.on_batch_begin(batch, logs=logs)
+                    callback_list.on_test_batch_begin(batch, logs=logs)
+                    val_mse = self.mse(x1_val, x2_val, y_val)
+                    logs['val_loss'] = val_mse
+                    callback_list.on_test_batch_end(batch, logs=logs)
+                    callback_list.on_batch_end(batch, logs=logs)
+            else:
+                val_mse = None
+
+            for batch, (x1, x2, y, dydx1, dydx2) in enumerate(data_train):
+                callback_list.on_batch_begin(batch, logs=logs)
+                callback_list.on_train_batch_begin(batch, logs=logs)
                 x1 = tf.Variable(x1)
                 x2 = tf.Variable(x2)
                 if self.gamma_sobolov > 0:
-                    loss, loss1, loss2  = self.train_step_sobolov(x1,x2, y, dydx1, dydx2)
-                    print_progress(k, loss = loss, mse = loss1, sobolov_mse = loss2)        
+                    loss, mse, sobolov_mse  = self.train_step_sobolov(x1,x2, y, dydx1, dydx2)
+                    print_progress(k, loss = loss, mse = mse, sobolov_mse = sobolov_mse, val_mse = val_mse)        
                 else:
-                    loss = self.train_step(x1,x2, y)
-                    print_progress(k, mse = loss)        
+                    mse = self.train_step(x1,x2, y)
+                    print_progress(k, mse = mse, val_mse = val_mse)        
+                logs['loss'] = mse
+                callback_list.on_train_batch_end(batch, logs=logs)
+                callback_list.on_batch_end(batch, logs=logs)
+            callback_list.on_epoch_end(k, logs=logs)
+
+            if self.model.stop_training:
+                break
+
+        callback_list.on_train_end(logs=logs)
+
+        return k, mse, val_mse
+
+
+
+        
 
         
 # %%
 
 if __name__ == '__main__':
     # Load data
-    data = pd.read_pickle(os.path.join('data_generation', 'qc_data_mpc.pkl'))
-    # Train test split
-    data_train, data_test = train_test_split(data, test_fraction=0.2, random_state=42)
+    data_dir = os.path.join('.', 'data_generation', 'closed_loop_mpc')
+
+    plan = do_mpc.tools.load_pickle(os.path.join(data_dir, 'sampling_plan_mpc.pkl'))
+
+    dh = do_mpc.sampling.DataHandler(plan)
+    dh.data_dir = os.path.join(data_dir, '')
+
+    data_train = get_data_for_approx_mpc(dh[:5])
+    data_test = get_data_for_approx_mpc(dh[-10:])
+
     # Preprocess data
-    data_train_tf = create_tf_dataset(data_train, batch_size=2000)
+    data_train_tf = create_tf_dataset(data_train, batch_size=100_000)
+    data_test_tf = create_tf_dataset(data_test, batch_size=100_000)
+
+    print(f'Train samples: {data_train.shape[0]}')
+    print(f'Test samples: {data_test.shape[0]}')
+
 
     # 
     model = get_model(data_train, n_layer=1, n_neurons=80, activation='tanh')
@@ -145,10 +199,18 @@ if __name__ == '__main__':
 
     sobolov_trainer = CustomTrainer(model)
     sobolov_trainer.setup_training(optimizer, gamma_sobolov=100)
+    early_stopping = keras.callbacks.EarlyStopping(
+        monitor="val_loss",
+        min_delta=1e-7,
+        patience=50,
+        verbose=0,
+        mode="auto",
+        restore_best_weights=True,
+    )
 
     # %%
 
-    sobolov_trainer.fit(data_train_tf, epochs=5000)
+    sobolov_trainer.fit(data_train_tf, val=data_test_tf, epochs=5000, callbacks=[early_stopping])
 
 
     # %%

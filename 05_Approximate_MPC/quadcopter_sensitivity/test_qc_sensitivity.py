@@ -40,8 +40,9 @@ mpc.set_initial_guess()
 t1 = do_mpc.tools.Timer()
 t2 = do_mpc.tools.Timer()
 
+np.random.seed(99)
 
-trajectory = qctrajectory.get_wobbly_figure_eight(s=1.5, a=-1.5, height=1, wobble=0.2, rot=np.pi/2)
+trajectory = qctrajectory.get_wobbly_figure_eight(s=1.5, a=-1.5, height=1.5, wobble=2, rot=np.pi/2)
 
 
 simulator.x0['pos'] = np.random.uniform(np.array([-1, -1, 0.5]), np.array([1, 1, 1.5]))
@@ -53,9 +54,9 @@ class ASMPC:
     def __init__(self, mpc):
         self.mpc = mpc
         self.nlp_diff = do_mpc.differentiator.DoMPCDifferentiatior(mpc)
-        self.nlp_diff.settings.check_LICQ = True
+        self.nlp_diff.settings.check_LICQ = False
         self.nlp_diff.settings.check_rank = False
-        self.nlp_diff.settings.check_SC = True
+        self.nlp_diff.settings.check_SC = False
         self.nlp_diff.settings.solver ='casadi'
 
         self._u_data = [mpc.u0.cat.full().reshape(-1,1)]

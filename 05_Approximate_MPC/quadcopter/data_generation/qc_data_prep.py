@@ -1,7 +1,7 @@
 # %% [markdown]
-# # Create data set
+# # Create data set for approximate MPC
 # 
-# Load data from the generated closed-loop samples and prepare for 
+# Load data from the generated closed-loop samples and prepare it for the approximate MPC. 
 
 # %%
 import numpy as np
@@ -21,95 +21,63 @@ import time
 
 # Control packages
 import do_mpc
-# %% [markdown]
-# # Load closed-loop data
-# - Load the sampling plan
-# - Initialize the data handler with the sampling plan
-# - Load the data from the closed-loop samples
-
-# %%
-data_dir = os.path.join('.', 'closed_loop_mpc')
-
-plan = do_mpc.tools.load_pickle(os.path.join(data_dir, 'sampling_plan_mpc.pkl'))
-
-dh = do_mpc.sampling.DataHandler(plan)
-dh.data_dir = os.path.join(data_dir, '')
 
 # %% [markdown]
-# ## Prepare data for NN training
-# We seek to train a model of the type:
-# $$x_{k+1} = f(x_k, u_k)$$
-# For all trajectories in the data set, we extract the following data:
-# - $x_k$: The state at time $k$
-# - $u_k$: The control input at time $k$
-# - $x_{k+1}$: The state at time $k+1$
-# 
-# We use the `DataHandler` to post-process the data and extract the data in the desired format.
+# ## Create helper functions for data handling and visualization
 
 # %%
-
-# dh.set_post_processing('x_k',
-#     lambda res: res['x_k']
-# )
-# dh.set_post_processing('pos_setpoint',
-#     lambda res: res['_p', 'pos_setpoint'])
-# dh.set_post_processing('yaw_setpoint',
-#     lambda res: res['_p', 'yaw_setpoint'])
-# dh.set_post_processing('u_k',
-#     lambda res: res['_u']
-# )
-
-results_with_success = dh.filter(output_filter = lambda res: res is not None)
-
-# %%
-if True:
+def analyze_success_and_licq(results):
     print('Optimizer success in for all samples of case:')
-    for i, res in enumerate(results_with_success):
+    for i, res in enumerate(results):
         print('Case {}: {}'.format(i,np.all(res['res']['success'])))
 
     print('LICQ satisfied in for all samples of case (None means not tested):')
-    for i, res in enumerate(results_with_success):
+    for i, res in enumerate(results):
         print('Case {}: {}'.format(i,np.all(res['res']['nlp_licq'])))
 
-
-# %% [markdown]
-# Stack the results of all trajectories into a single array and create a `pandas` dataframe.
-
-if False:
+ # %%
+def animate_results(results):
     plt.ion()
     fig, ax = plt.subplots()
 
     lines = []
 
-    for dh_i in results_with_success:
+    for res in results:
         for i, line in enumerate(lines):
             line[0].set_alpha(1/(i+1))
 
-        #lines.append(ax.plot(dh_i['res']['x_k'][:,0], dh_i['res']['x_k'][:,1], color='k'))
-        lines.append(ax.plot(dh_i['res']['pos_k'][:,0], dh_i['res']['pos_k'][:,1], '--', color='r', ))
+        #lines.append(ax.plot(res['res']['x_k'][:,0], res['res']['x_k'][:,1], color='k'))
+        lines.append(ax.plot(res['res']['pos_k'][:,0], res['res']['pos_k'][:,1], '--', color='r', ))
         plt.show()
         plt.pause(0.5)
 
-if False:
-    n_traj = 10
+    return fig, ax
+
+# %%
+
+def plot_some_trajectories(results, n_traj=10):
     fig, ax = plt.subplots(n_traj, sharex=True)
 
-    for i, dh_i in enumerate(results_with_success[:n_traj]):
-        ax[i].plot(dh_i['res']['pos_k'][:,0])
-        ax[i].plot(dh_i['res']['pos_k'][:,1])
-        ax[i].plot(dh_i['res']['pos_k'][:,2])
+    for i, res in enumerate(results[:n_traj]):
+        ax[i].plot(res['res']['pos_k'][:,0], label='x')
+        ax[i].plot(res['res']['pos_k'][:,1], label='y')
+        ax[i].plot(res['res']['pos_k'][:,2], label='z')
 
         ax[i].set_prop_cycle(None)
 
-        ax[i].plot(dh_i['res']['p_k'][:,0], '--')
-        ax[i].plot(dh_i['res']['p_k'][:,1], '--')
-        ax[i].plot(dh_i['res']['p_k'][:,2], '--')
-    
-    plt.show(block=True)
+        ax[i].plot(res['res']['p_k'][:,0], '--', label='x set')
+        ax[i].plot(res['res']['p_k'][:,1], '--', label='y set')
+        ax[i].plot(res['res']['p_k'][:,2], '--', label='z set')
 
+        ax[i].set_ylabel('pos.')
+
+    ax[-1].legend()
+
+    return fig, ax
 
 # %%
-if True:
+    
+def get_data_for_approx_mpc(results):
     X_K = []
     U_K = []
     U_K_prev = []
@@ -117,7 +85,7 @@ if True:
     dUdU0_prev = []
 
 
-    for res_i in results_with_success:
+    for res_i in results:
         # dyaw =np.sin(res_i['res']['p_k'][:,[-1]] - res_i['res']['x_k'][:, [6]])
         X_K.append(res_i['res']['x_k'][1:,:])
         U_K.append(res_i['res']['u_k'][1:,:])
@@ -149,28 +117,67 @@ if True:
         keys=['x_k', 'u_k', 'u_k_prev', 'du0dx0', 'du0du0_prev']
     )
 
+    return data
+
+
+# %% [markdown]
+# # Load closed-loop data
+# - Load the sampling plan
+# - Initialize the data handler with the sampling plan
+# - Load the data from the closed-loop samples
+# - Filter out the samples that did not converge
+# - Visualize the results
+
+# %%
+if __name__ == '__main__':
+
+    data_dir = os.path.join('.', 'closed_loop_mpc')
+
+    plan = do_mpc.tools.load_pickle(os.path.join(data_dir, 'sampling_plan_mpc.pkl'))
+
+    dh = do_mpc.sampling.DataHandler(plan)
+    dh.data_dir = os.path.join(data_dir, '')
+
+    # Filter out the samples that did not converge
+    results_with_success = dh.filter(output_filter = lambda res: res is not None)
+    analyze_success_and_licq(results_with_success)
+
+    # %% [markdown]
+    # ## Visulations to analyze the data
+    if False:
+        animate_results(results_with_success)
+
+    if True:
+        plot_some_trajectories(results_with_success, 3)
+
+    # %% [markdown]
+    # ## Pre-process data 
+
+    df_data = get_data_for_approx_mpc(results_with_success)
+
+
     # %% [markdown]
     # ## Analsis of the data
     # ### Description:
 
     # %% [code]
 
-    data.describe()
+    df_data.describe()
 
     # %% [markdown]
     # ### Histograms
 
     # %%
 
-    ax = data[['x_k', 'u_k']].hist(figsize=(8,8))
+    ax = df_data[['x_k', 'u_k']].hist(figsize=(8,8))
     fig = plt.gcf()
     fig.tight_layout()
 
 
     # %% [markdown]
-    # ## Export data to pickle
+    # ## Export df_data to pickle
 
     # %%
-    data.to_pickle('qc_data_mpc.pkl')
+    df_data.to_pickle('qc_data_mpc.pkl')
 
     # %%

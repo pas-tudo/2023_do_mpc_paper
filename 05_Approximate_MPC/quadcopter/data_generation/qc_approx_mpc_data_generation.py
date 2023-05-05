@@ -43,12 +43,6 @@ IS_INTERACTIVE = hasattr(sys, 'ps1')
 
 # ## Create sampling plan
 
-# We define $N$ sampling cases with random initial conditions and setpoints for the CSTR. 
-# - The initial conditions are sampled uniformly from the bounds defined in the `cstr_bounds.json` file.
-# - The setpoint is sampled uniformly from the bounds defined in the `cstr_bounds.json` file.
-#
-# An impression of the sampling cases is shown below:
-
 # %% [code]
 
 def get_uniform_func(lb, ub):
@@ -72,21 +66,13 @@ if __name__ ==  '__main__' :
     sp.set_sampling_var('rot', get_uniform_func(-np.pi, np.pi))
     sp.set_sampling_var('input_noise_dist', get_uniform_func(0.5e-3, 5e-3))
 
-    plan = sp.gen_sampling_plan(8)
+    plan = sp.gen_sampling_plan(50)
     sp.export(os.path.join(data_dir, 'sampling_plan_mpc'))
 
 
 
 # %% [markdown]
 # ## Create sampling function
-# 
-# We define a sampling function that takes the initial conditions and setpoint as input and returns the closed-loop simulation data.
-# Notice that the sampling function must have the same **keyword arguments** as defined in the sampling plan, 
-# that is, ``C_a_0``, ``C_b_0``, ``T_R_0``, ``T_K_0``, and ``C_b_set``. The order of these arguments does not matter.
-# In order to run the closed-loop simulation, we also need to initialize the following objects:
-# - The model
-# - The simulator
-# - The controller
 
 
 # %% [code]
@@ -95,7 +81,7 @@ qcconf = qcmodel.QuadcopterConfig()
 simulator, sim_p_template = qccontrol.get_simulator(t_step, qcmodel.get_model(qcconf, with_pos=True))
 mpc, mpc_p_template = qccontrol.get_MPC(t_step, qcmodel.get_model(qcconf, with_pos=True))
 nlp_diff = do_mpc.differentiator.DoMPCDifferentiatior(mpc)
-nlp_diff.settings.check_LICQ = True
+nlp_diff.settings.check_LICQ = False
 nlp_diff.settings.check_SC = False
 nlp_diff.settings.check_rank = False
 
@@ -162,7 +148,6 @@ def sampling_function(
     qccontrol.mpc_fly_trajectory(
         simulator, 
         mpc, 
-        mpc_p_template, 
         sim_p_template, 
         N_iter=200, 
         trajectory=figure_eight_trajectory,

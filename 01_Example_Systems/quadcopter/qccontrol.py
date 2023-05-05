@@ -105,7 +105,7 @@ def get_MPC(t_step: float, model: do_mpc.model.Model) -> Tuple[do_mpc.controller
         't_step': t_step,   
         'store_full_solution': False,
         # Use MA27 linear solver in ipopt for faster calculations:
-        'nlpsol_opts': {'ipopt.linear_solver': 'mumps'}
+        'nlpsol_opts': {'ipopt.linear_solver': 'mumps', 'ipopt.tol': 1e-16}
     }
     mpc.set_param(**setup_mpc)
 

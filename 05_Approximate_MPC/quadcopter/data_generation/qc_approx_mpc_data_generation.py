@@ -39,11 +39,20 @@ import do_mpc
 
 IS_INTERACTIVE = hasattr(sys, 'ps1')
 
+
+# --------------------
+
+data_dir = os.path.join('.', 'closed_loop_mpc_02')
+
+# --------------------
+
 # %% [markdown]
 
 # ## Create sampling plan
 
 # %% [code]
+
+np.random.seed(99)
 
 def get_uniform_func(lb, ub):
     def f():
@@ -54,20 +63,21 @@ def get_uniform_func(lb, ub):
 
 if __name__ ==  '__main__' :
     sp = do_mpc.sampling.SamplingPlanner(overwrite=True)
-    data_dir = os.path.join('.', 'closed_loop_mpc')
     pathlib.Path(data_dir).mkdir(parents=True, exist_ok=True)
 
     sp.set_sampling_var('phi0',  get_uniform_func(-np.pi/8, np.pi/8))
     sp.set_sampling_var('phi1',  get_uniform_func(-np.pi/8, np.pi/8))
     sp.set_sampling_var('phi2',  get_uniform_func(-np.pi/8, np.pi/8))
-    sp.set_sampling_var('speed',  get_uniform_func(0.2, 1.5))
-    sp.set_sampling_var('radius',  get_uniform_func(0.2, 1.5))
-    sp.set_sampling_var('wobble_height',   get_uniform_func(0, 1.5))
+    sp.set_sampling_var('speed',  get_uniform_func(0.5, 1.5))
+    sp.set_sampling_var('radius',  get_uniform_func(0.5, 1.5))
+    sp.set_sampling_var('wobble_height',   get_uniform_func(0.5, 1.5))
     sp.set_sampling_var('rot', get_uniform_func(-np.pi, np.pi))
-    sp.set_sampling_var('input_noise_dist', get_uniform_func(0.5e-3, 5e-3))
+    sp.set_sampling_var('input_noise_dist', get_uniform_func(1e-3, 1e-2))
 
     plan = sp.gen_sampling_plan(50)
     sp.export(os.path.join(data_dir, 'sampling_plan_mpc'))
+
+    print(pd.DataFrame(plan))
 
 
 
@@ -183,7 +193,7 @@ To initialize the ``Sampler``, we pass:
 if __name__ ==  '__main__' :
     
     sampler = do_mpc.sampling.Sampler(plan, overwrite=True)
-    sampler.data_dir = os.path.join('.', 'closed_loop_mpc', '')
+    sampler.data_dir = os.path.join(data_dir, '')
 
     sampler.set_sample_function(sampling_function)
 

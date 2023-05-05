@@ -145,3 +145,5 @@ dmypy.json
 
 05_Approximate_MPC/quadcopter/meta_analysis/models_meta/
 05_Approximate_MPC/quadcopter/meta_analysis/models_meta_02/
+
+05_Approximate_MPC/quadcopter/data_generation/closed_loop_mpc_02/

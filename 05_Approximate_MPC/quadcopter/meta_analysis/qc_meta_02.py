@@ -10,6 +10,7 @@ import pandas as pd
 from casadi import *
 import copy
 import pandas as pd
+import json
 
 sys.path.append(os.path.join('..', '.'))
 sys.path.append(os.path.join('..','..','..','01_Example_Systems','quadcopter'))
@@ -57,13 +58,20 @@ simulator, sim_p_template = qccontrol.get_simulator(t_step, qcmodel.get_model(qc
 res = []
 
 # List dir in models_meta
-model_name_list = os.listdir('models_meta')
-noise_dist_list = [0, 1e-3, 1e-2]
+
+model_path = 'models_meta_02'
+model_name_list = os.listdir(model_path)
+noise_dist_list = [0, 1e-4, 1e-3]
+
+# %%
 
 
 for model_name in model_name_list:
 
-    keras_model = keras.models.load_model(os.path.join('models_meta', model_name))
+    keras_model = keras.models.load_model(os.path.join(model_path, model_name))
+    with open(os.path.join(model_path, model_name, 'custom_meta.json')) as f:
+        meta = json.load(f)
+
     simulator, sim_p_template = qccontrol.get_simulator(t_step, qcmodel.get_model(qcconf, with_pos=True))
 
     for noise_dist in noise_dist_list:
@@ -74,12 +82,12 @@ for model_name in model_name_list:
         ampc = ApproxMPC(keras_model, n_u=4, n_x=12, u0=0.067*np.ones((4,1)))
 
 
-        tracjectory = qctrajectory.get_wobbly_figure_eight(s=1, a=1, height=0, wobble=.5, rot=0)
+        tracjectory = qctrajectory.get_wobbly_figure_eight(s=1, a=1, height=0, wobble=.5, rot=np.pi/2)
 
         # res_plot = plot_results.ResultPlot(qcconf, simulator.data, figsize=(12,8))
 
         simulator.x0['pos'] = tracjectory(0).T[:3]
-        simulator.x0['phi'] = np.random.uniform(-np.pi/8*np.ones(3), np.pi/8*np.ones(3))
+        # simulator.x0['phi'] = np.random.uniform(-np.pi/8*np.ones(3), np.pi/8*np.ones(3))
         simulator.reset_history()
 
 
@@ -97,17 +105,19 @@ for model_name in model_name_list:
 
         res.append({
             'model_name': model_name,
-            **get_config_from_name(model_name),
+            # **get_config_from_name(model_name),
+            **meta,
             'sim_res': copy.copy(simulator.data),
             'noise_dist': noise_dist,
         })
 # %%
 res_df = pd.DataFrame(res)
+
+res_df
 # %%
 res_df['closed_loop_cost'] = res_df['sim_res'].apply(lambda x: t_step*np.sum(x['_aux', 'del_setpoint']))
 res_df['n_iter'] = res_df['sim_res'].apply(lambda x: x['_aux', 'del_setpoint'].shape[0])
 # %%
-
 # %%
 
 # fig, ax = plt.subplots(4,3, sharex=True, sharey=True, dpi=200)
@@ -127,13 +137,15 @@ ax_outer.set_yticks([], [])
 
 ax = fig_inner.subplots(4,3, sharex=True, sharey=True)
 
+n_traj_list = np.flip(np.sort(res_df['number_of_trajectories'].unique()))
+noise_dist_list = np.sort(res_df['noise_dist'].unique())
 
-for i, perc in enumerate(res_df['test_perc'].unique()):
-    for j, noise_dist in enumerate(res_df['noise_dist'].unique()):
-        filtered = res_df.loc[res_df['test_perc'] == perc].loc[res_df['noise_dist'] == noise_dist]
+for i, n_tra in enumerate(n_traj_list):
+    for j, noise_dist in enumerate(noise_dist_list):
+        filtered = res_df.loc[res_df['number_of_trajectories'] == n_tra].loc[res_df['noise_dist'] == noise_dist]
 
-        with_sobo = filtered.loc[filtered['gamma'] >0 ].iloc[0]
-        without_sobo = filtered.loc[filtered['gamma'] == 0 ].iloc[0]
+        with_sobo = filtered.loc[filtered['gamma_sobolov'] >0 ].iloc[0]
+        without_sobo = filtered.loc[filtered['gamma_sobolov'] == 0 ].iloc[0]
 
         ax[i,j].plot(with_sobo['sim_res']['_x','pos'][:,0], with_sobo['sim_res']['_x','pos'][:,1], label='with sobolov')
         ax[i,j].plot(without_sobo['sim_res']['_x','pos'][:,0], without_sobo['sim_res']['_x','pos'][:,1], label='w/o sobolov')
@@ -147,9 +159,16 @@ for i, perc in enumerate(res_df['test_perc'].unique()):
             p = ax[i,j].bar(1.4,  val/2.5,bottom=-1, label=val, width=0.1)
             ax[i,j].bar_label(p, fmt='%.2f')
 
+        ax[i,j].xaxis.set_ticks([])
+        ax[i,j].yaxis.set_ticks([])
+        ax[i,j].spines[['top', 'right', 'bottom', 'left']].set_visible(False)
 
+        if i == 3:
+            ax[i,j].set_xlabel(f'{noise_dist}')
 
-        ax[i,j].axis('off')
+        # ax[i,j].axis('off')
+
+    ax[i, 0].set_ylabel(f'{n_tra}')
 
     ax[-1,-1].legend()
 
@@ -159,10 +178,10 @@ for i, perc in enumerate(res_df['test_perc'].unique()):
 plt.show()
 
 
-fig_outer.savefig(os.path.join(plot_path, 'results', '05_approx_mpc_sobolov.pgf'), bbox_inches='tight')
+# fig_outer.savefig(os.path.join(plot_path, 'results', '05_approx_mpc_sobolov.pgf'), bbox_inches='tight')
 
 
 # %%
-
+res_df[res_df['noise_dist']]
 
 # %%

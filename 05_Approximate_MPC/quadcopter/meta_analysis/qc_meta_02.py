@@ -29,17 +29,6 @@ mplconfig.config_mpl(os.path.join(plot_path,'notation.tex'))
 
 plt.ion()
 # %%
-# Helper function
-def get_config_from_name(model_name):
-    model_name = model_name.split('_')
-    conf = {}
-
-    conf['test_perc'] = float(model_name[4])*10
-    conf['gamma'] = float(model_name[-1])
-
-    return conf
-
-
 class ProgressCallback:
     def __init__(self):
         self.k = 1
@@ -53,18 +42,16 @@ t_step = 0.04
 qcconf = qcmodel.QuadcopterConfig()
 simulator, sim_p_template = qccontrol.get_simulator(t_step, qcmodel.get_model(qcconf, with_pos=True))
 
-
-# Prepare result dictionary 
-res = []
-
 # List dir in models_meta
 
 model_path = 'models_meta_02'
 model_name_list = os.listdir(model_path)
-noise_dist_list = [0, 1e-4, 1e-3]
+noise_dist_list = [0, 1e-3, 1e-2]
 
 # %%
 
+# Prepare result dictionary 
+res = []
 
 for model_name in model_name_list:
 
@@ -82,7 +69,7 @@ for model_name in model_name_list:
         ampc = ApproxMPC(keras_model, n_u=4, n_x=12, u0=0.067*np.ones((4,1)))
 
 
-        tracjectory = qctrajectory.get_wobbly_figure_eight(s=1, a=1, height=0, wobble=.5, rot=np.pi/2)
+        tracjectory = qctrajectory.get_wobbly_figure_eight(s=1, a=1.0, height=0, wobble=.5, rot=0)
 
         # res_plot = plot_results.ResultPlot(qcconf, simulator.data, figsize=(12,8))
 
@@ -122,7 +109,7 @@ res_df['n_iter'] = res_df['sim_res'].apply(lambda x: x['_aux', 'del_setpoint'].s
 
 # fig, ax = plt.subplots(4,3, sharex=True, sharey=True, dpi=200)
 
-fig_outer = plt.figure(layout='constrained', figsize=(mplconfig.columnwidth, 2.3), dpi=200)
+fig_outer = plt.figure(layout='constrained', figsize=(mplconfig.columnwidth, 2.5), dpi=200)
 
 ax_outer = fig_outer.add_axes([0,0,1,1])
 ax_outer.set(frame_on=False)
@@ -135,10 +122,11 @@ ax_outer.set_xlim(0,1)
 ax_outer.set_xticks([], [])
 ax_outer.set_yticks([], [])
 
-ax = fig_inner.subplots(4,3, sharex=True, sharey=True)
 
 n_traj_list = np.flip(np.sort(res_df['number_of_trajectories'].unique()))
 noise_dist_list = np.sort(res_df['noise_dist'].unique())
+
+ax = fig_inner.subplots(len(n_traj_list), len(noise_dist_list), sharex=True, sharey=True)
 
 for i, n_tra in enumerate(n_traj_list):
     for j, noise_dist in enumerate(noise_dist_list):
@@ -147,20 +135,23 @@ for i, n_tra in enumerate(n_traj_list):
         with_sobo = filtered.loc[filtered['gamma_sobolov'] >0 ].iloc[0]
         without_sobo = filtered.loc[filtered['gamma_sobolov'] == 0 ].iloc[0]
 
-        ax[i,j].plot(with_sobo['sim_res']['_x','pos'][:,0], with_sobo['sim_res']['_x','pos'][:,1], label='with sobolov')
-        ax[i,j].plot(without_sobo['sim_res']['_x','pos'][:,0], without_sobo['sim_res']['_x','pos'][:,1], label='w/o sobolov')
+        line_sobo = ax[i,j].plot(with_sobo['sim_res']['_x','pos'][:,0], with_sobo['sim_res']['_x','pos'][:,1], label='with Sobolov')
+        line_mse = ax[i,j].plot(without_sobo['sim_res']['_x','pos'][:,0], without_sobo['sim_res']['_x','pos'][:,1], label='w/o sobolov')
 
-        if with_sobo['n_iter'] > 100:
-            val = with_sobo['closed_loop_cost']
-            p = ax[i,j].bar(1.2,  val/2.5, bottom=-1,label=val, width=0.1)
-            ax[i,j].bar_label(p, fmt='%.2f')
-        if without_sobo['n_iter'] > 100:
-            val = without_sobo['closed_loop_cost']
-            p = ax[i,j].bar(1.4,  val/2.5,bottom=-1, label=val, width=0.1)
-            ax[i,j].bar_label(p, fmt='%.2f')
+        if False:
+            if with_sobo['n_iter'] > 150:
+                val = with_sobo['closed_loop_cost']
+                p = ax[i,j].bar(1.2,  val/2.5, bottom=-1,label=val, width=0.1)
+                ax[i,j].bar_label(p, fmt='%.2f')
+            if without_sobo['n_iter'] > 150:
+                val = without_sobo['closed_loop_cost']
+                p = ax[i,j].bar(1.4,  val/2.5,bottom=-1, label=val, width=0.1)
+                ax[i,j].bar_label(p, fmt='%.2f')
 
         ax[i,j].xaxis.set_ticks([])
         ax[i,j].yaxis.set_ticks([])
+        ax[i,j].set_xlim(-1.1,1.1)
+        ax[i,j].set_ylim(-1.1,1.1)
         ax[i,j].spines[['top', 'right', 'bottom', 'left']].set_visible(False)
 
         if i == 3:
@@ -170,7 +161,7 @@ for i, n_tra in enumerate(n_traj_list):
 
     ax[i, 0].set_ylabel(f'{n_tra}')
 
-    ax[-1,-1].legend()
+    ax[-1,-1].legend(line_sobo+line_mse, [r'$L_\text{Sob}$', r'$L_\text{MSE}$'], loc='upper left')
 
 
 # fig_inner.tight_layout(pad=0)
@@ -178,10 +169,30 @@ for i, n_tra in enumerate(n_traj_list):
 plt.show()
 
 
-# fig_outer.savefig(os.path.join(plot_path, 'results', '05_approx_mpc_sobolov.pgf'), bbox_inches='tight')
+fig_outer.savefig(os.path.join(plot_path, 'results', '05_approx_mpc_sobolov.pgf'), bbox_inches='tight')
 
 
 # %%
-res_df[res_df['noise_dist']]
 
+idx = ['train_mse', 'val_mse', 'number_of_trajectories']
+
+sobo_df = res_df[res_df['gamma_sobolov'] == 100][res_df['noise_dist']==0][idx].sort_values('number_of_trajectories')
+mse_df = res_df[res_df['gamma_sobolov'] == 0][res_df['noise_dist']==0][idx].sort_values('number_of_trajectories')
+
+sobo_df.index = sobo_df['number_of_trajectories']
+sobo_df.drop('number_of_trajectories', axis=1, inplace=True)
+
+mse_df.index = mse_df['number_of_trajectories']
+mse_df.drop('number_of_trajectories', axis=1, inplace=True)
+
+combined_df = pd.concat([sobo_df, mse_df], axis=1, keys=['sobolov', 'mse'])
+combined_df *= 1e4
+# %%
+sobo_df
+# %%
+
+combined_df.to_latex(
+    os.path.join(plot_path, 'results', '05_approx_mpc_sobolov_table.tex'),
+    float_format="%.2f",
+)
 # %%

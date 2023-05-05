@@ -20,7 +20,7 @@ import qc_train_approx_mpc
 
 # %%
 
-data_dir = os.path.join('..', 'data_generation', 'closed_loop_mpc')
+data_dir = os.path.join('..', 'data_generation', 'closed_loop_mpc_02')
 
 plan = do_mpc.tools.load_pickle(os.path.join(data_dir, 'sampling_plan_mpc.pkl'))
 
@@ -54,8 +54,6 @@ for number_of_trajectories in number_of_trajectories_list:
 
         # 
         model = get_model(data_train, n_layer=1, n_neurons=80, activation='tanh')
-        model.summary()
-
 
         # %%
 
@@ -69,8 +67,8 @@ for number_of_trajectories in number_of_trajectories_list:
         early_stopping = keras.callbacks.EarlyStopping(
             monitor="val_loss",
             min_delta=1e-8,
-            patience=100,
-            verbose=0,
+            patience=1000,
+            verbose=1,
             mode="auto",
             restore_best_weights=True,
         )

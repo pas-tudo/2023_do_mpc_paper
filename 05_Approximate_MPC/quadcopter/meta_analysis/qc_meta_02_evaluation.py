@@ -1,3 +1,9 @@
+# %% [markdown]
+# # Meta analysis of approximate MPC for quadcopter
+# In this script, the trained approximate MPC controllers obtained in ``qc_meta_01.py`` are evaluated.
+# The controller variants differ in the number of trajectories used for training and value of $\gamma$ for the Sobolev norm. 
+# 
+
 
 # %%
 import sys 

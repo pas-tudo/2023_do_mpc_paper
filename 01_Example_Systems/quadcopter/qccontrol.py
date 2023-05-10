@@ -29,7 +29,6 @@ import do_mpc
 
 # Quadcopter 
 import qcmodel
-from plot_results import plot_results
 from qctrajectory import Trajectory
     
 
@@ -213,6 +212,8 @@ def mpc_fly_trajectory(
         u0 = controller.make_step(x0)
 
         u0 += np.random.uniform(-noise_dist, noise_dist, size=(4,1))
+
+        u0 = np.clip(u0, 0, 0.3)
 
         x0 = simulator.make_step(u0)
 

@@ -18,6 +18,7 @@ import json
 import pathlib
 import multiprocessing as mp
 import importlib
+import pickle
 
 from casadi import *
 from casadi.tools import *
@@ -71,7 +72,16 @@ if __name__ ==  '__main__' :
     sp.set_sampling_var('C_b_set', get_random_uniform_func(bound_dict, 'states', 'C_b', reduce_range = 0.))
 
     plan = sp.gen_sampling_plan(50)
-    sp.export(os.path.join(data_dir, 'sampling_plan_closed_loop_meta'))
+
+    export_dir = os.path.join(data_dir, 'sampling_plan_closed_loop_meta.pkl')
+
+    if os.path.isfile(export_dir):
+        print('Plan already exists, overwrite is set to False. Loading existing plan.')
+        with open(export_dir, 'rb') as f:
+            plan = pickle.load(f)
+    else:
+        print('Plan does not exist, saving new plan.')
+        sp.export(os.path.join(data_dir, 'sampling_plan_closed_loop_meta'))
 
 
 # %% [markdown]

@@ -1,13 +1,9 @@
 # %% [markdown]
-"""
-# Analysis of closed-loop MPC results for the CSTR system with a neural network model
-Comparison of controller with exact model and NN model. 
+# # Analysis of closed-loop MPC results for the CSTR system with a neural network model
+# Comparison of controller with exact model and NN model. 
+# Import the necessary packages.
 
-Import the necessary packages.
-"""
 # %% [code]
-# Import packages
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -17,7 +13,6 @@ import time as time
 import sys 
 import os
 import json
-import pathlib
 import importlib
 
 import do_mpc
@@ -32,7 +27,6 @@ import mplconfig
 importlib.reload(mplconfig)
 
 mplconfig.config_mpl(os.path.join('..','..','..','00_plotting','notation.tex'))
-# %%
 
 # %% [markdown]
 # # Load closed-loop data
@@ -47,17 +41,6 @@ plan = do_mpc.tools.load_pickle(os.path.join(data_dir, 'sampling_plan_closed_loo
 
 dh = do_mpc.sampling.DataHandler(plan)
 dh.data_dir = os.path.join(data_dir, '')
-
-# %%
-if False:
-    fig, ax = plt.subplots(4,1)
-
-    for dh_k in dh[:]:
-        _,_, sim_graphics = cstr_helper.plot_cstr_results_new(dh_k['res']['mpc_true'], (fig, ax),  linewidth = 1, alpha = .3,  with_legend=False, with_setpoint=False)
-        _ = [ax_i.set_prop_cycle(None) for ax_i in ax]
-        c_,_, nn_graphics = cstr_helper.plot_cstr_results_new(dh_k['res']['mpc_nn'], (fig, ax), linewidth=1, alpha=.3,  with_legend=False, with_setpoint=False)
-        _ = [ax_i.set_prop_cycle(None) for ax_i in ax]
-
 
 # %% [markdown]
 # # Post-preocessing of the results
@@ -104,17 +87,22 @@ dh.set_post_processing('exact_mpc_success',
     lambda res: perc_success(res['mpc_true'])
 )
 
+# %% [markdown]
+# ## Convert to pandas DataFrame
+
+
 # %%
 df_res = pd.DataFrame(dh.filter(output_filter = lambda exact_mpc_success: exact_mpc_success > 0.99 ))
-# df_res = pd.DataFrame(dh[:])
 df_res.sort_values(by='C_b_set', inplace=True)
 
+# %% [markdown]
+# ## Plot results
+
 # %%
-# of type scatter
 fig, ax = plt.subplots(2,1, figsize=(mplconfig.columnwidth, 1.1*mplconfig.columnwidth), dpi=160, sharex=True)
 
-ax[0].plot(df_res['C_b_set'], df_res['exact_mpc_cost'], 'o', label='exact model', color='k', markerfacecolor='none')
-ax[0].plot(df_res['C_b_set'], df_res['nn_mpc_cost'], 'x', label='NN model', color='k')
+ax[0].semilogy(df_res['C_b_set'], df_res['exact_mpc_cost'], 'o', label='exact model', color='k', markerfacecolor='none')
+ax[0].semilogy(df_res['C_b_set'], df_res['nn_mpc_cost'], 'x', label='NN model', color='k')
 ax[0].legend(title='MPC with:', loc='upper left', fontsize='small')
 
 ax[0].set_ylabel('closed-loop cost [-]')

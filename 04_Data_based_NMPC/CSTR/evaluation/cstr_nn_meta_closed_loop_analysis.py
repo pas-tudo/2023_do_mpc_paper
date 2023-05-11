@@ -99,11 +99,11 @@ df_res.sort_values(by='C_b_set', inplace=True)
 # ## Plot results
 
 # %%
-fig, ax = plt.subplots(2,1, figsize=(mplconfig.columnwidth, 1.1*mplconfig.columnwidth), dpi=160, sharex=True)
+fig, ax = plt.subplots(2,1, figsize=(mplconfig.columnwidth, 1.2*mplconfig.columnwidth), dpi=160, sharex=True)
 
 ax[0].semilogy(df_res['C_b_set'], df_res['exact_mpc_cost'], 'o', label='exact model', color='k', markerfacecolor='none')
 ax[0].semilogy(df_res['C_b_set'], df_res['nn_mpc_cost'], 'x', label='NN model', color='k')
-ax[0].legend(title='MPC with:', loc='upper left', fontsize='small')
+ax[0].legend(title='MPC with:', loc='lower right', fontsize='small')
 
 ax[0].set_ylabel('closed-loop cost [-]')
 

@@ -3,7 +3,7 @@
 # In this script, the trained approximate MPC controllers obtained in ``qc_meta_01.py`` are evaluated.
 # The controller variants differ in the number of trajectories used for training and value of $\gamma$ for the Sobolev norm. 
 # 
-
+# First, we import the required packages.
 
 # %%
 import sys 
@@ -18,22 +18,27 @@ import copy
 import pandas as pd
 import json
 
+# Add path for quadcopter files and import them
 sys.path.append(os.path.join('..', '.'))
 sys.path.append(os.path.join('..','..','..','01_Example_Systems','quadcopter'))
-
 import qcmodel
 import qccontrol
 import plot_results
 import qctrajectory
 from qc_approx_helper import ApproxMPC
 
-
+# Configure plotting
 plot_path = os.path.join('..', '..','..','00_plotting')
 sys.path.append(plot_path)
 import mplconfig
 mplconfig.config_mpl(os.path.join(plot_path,'notation.tex'))
 
 plt.ion()
+
+# %% [markdown]
+# ## Preparation
+# - Prepare setup of the simulator for the quadcopter model, representing the true system.
+# - Get the list of models to be evaluated.
 # %%
 class ProgressCallback:
     def __init__(self):
@@ -46,7 +51,6 @@ class ProgressCallback:
 # Get simulator 
 t_step = 0.04
 qcconf = qcmodel.QuadcopterConfig()
-simulator, sim_p_template = qccontrol.get_simulator(t_step, qcmodel.get_model(qcconf, with_pos=True))
 
 # List dir in models_meta
 
@@ -54,7 +58,26 @@ model_path = 'models_meta_02'
 model_name_list = os.listdir(model_path)
 noise_dist_list = [0, 1e-3, 1e-2]
 
+# %% [markdown]
+# ## Evaluation
+# The purpose of the meta evaluation is to test the performance of the trained approximate MPC controllers on the true system.
+# for models trained on different number of trajectories and different values of $\gamma$. 
+# Furthermore, the robustness of the controllers is tested by adding input noise to the quadcopter system.
+# 
+# The following steps are performed for each model:
+# - Load the keras model and the meta data (containing the values of $\gamma$ and the number of trajectories used for training).
+# - Generate a simulator
+# - For each of the investigated noise magnitudes:
+#     - Setup the approximate MPC controller
+#     - Run the controller on the true system
+#     - Store the results in a dictionary
+
 # %%
+# Fix the seed
+np.random.seed(99)
+
+# For all tests, follow this trajectory
+tracjectory = qctrajectory.get_wobbly_figure_eight(s=1, a=1.0, height=0, wobble=.5, rot=0)
 
 # Prepare result dictionary 
 res = []
@@ -75,15 +98,8 @@ for model_name in model_name_list:
         ampc = ApproxMPC(keras_model, n_u=4, n_x=12, u0=0.067*np.ones((4,1)))
 
 
-        tracjectory = qctrajectory.get_wobbly_figure_eight(s=1, a=1.0, height=0, wobble=.5, rot=0)
-
-        # res_plot = plot_results.ResultPlot(qcconf, simulator.data, figsize=(12,8))
-
         simulator.x0['pos'] = tracjectory(0).T[:3]
-        # simulator.x0['phi'] = np.random.uniform(-np.pi/8*np.ones(3), np.pi/8*np.ones(3))
         simulator.reset_history()
-
-
 
         progress_cb = ProgressCallback()
 
@@ -98,31 +114,39 @@ for model_name in model_name_list:
 
         res.append({
             'model_name': model_name,
-            # **get_config_from_name(model_name),
             **meta,
             'sim_res': copy.copy(simulator.data),
             'noise_dist': noise_dist,
         })
+# %% [markdown]
+# ## Postprocessing
+# The results are stored in a pandas dataframe and additional columns are added for further analysis.
+
+
 # %%
 res_df = pd.DataFrame(res)
 
-res_df
 # %%
 res_df['closed_loop_cost'] = res_df['sim_res'].apply(lambda x: t_step*np.sum(x['_aux', 'del_setpoint']))
 res_df['n_iter'] = res_df['sim_res'].apply(lambda x: x['_aux', 'del_setpoint'].shape[0])
+
 # %%
+res_df
+
+# %% [markdown]
+# ## Plotting
+# Generate plots for each model and noise magnitude.
+
 # %%
 
-# fig, ax = plt.subplots(4,3, sharex=True, sharey=True, dpi=200)
-
-fig_outer = plt.figure(layout='constrained', figsize=(mplconfig.columnwidth, 2.5), dpi=200)
+fig_outer = plt.figure(layout='constrained', figsize=(mplconfig.columnwidth, 3), dpi=200)
 
 ax_outer = fig_outer.add_axes([0,0,1,1])
 ax_outer.set(frame_on=False)
 fig_inner = fig_outer.subfigures(1,1, wspace=0., hspace=0.)
 
-ax_outer.set_ylabel(r'increasing number of training samples $\longrightarrow$')
-ax_outer.set_xlabel(r'increasing additive input disturbance $\longrightarrow$')
+ax_outer.set_ylabel(r'number of training trajectories $p$', fontsize=12)
+ax_outer.set_xlabel(r'additive input disturbance $\alpha$ in test', fontsize=12)
 
 ax_outer.set_xlim(0,1)
 ax_outer.set_xticks([], [])
@@ -161,22 +185,23 @@ for i, n_tra in enumerate(n_traj_list):
         ax[i,j].spines[['top', 'right', 'bottom', 'left']].set_visible(False)
 
         if i == 3:
-            ax[i,j].set_xlabel(f'{noise_dist}')
+            ax[i,j].set_xlabel(r'$\alpha$='+f'{noise_dist}', fontsize=10)
 
         # ax[i,j].axis('off')
 
-    ax[i, 0].set_ylabel(f'{n_tra}')
+    ax[i, 0].set_ylabel(f'$p=${n_tra}', fontsize=10)
 
     ax[-1,-1].legend(line_sobo+line_mse, [r'$L_\text{Sob}$', r'$L_\text{MSE}$'], loc='upper left')
 
-
-# fig_inner.tight_layout(pad=0)
 
 plt.show()
 
 
 fig_outer.savefig(os.path.join(plot_path, 'results', '05_approx_mpc_sobolov.pgf'), bbox_inches='tight')
 
+
+# %% [markdown]
+# ## Export results to table
 
 # %%
 
@@ -193,8 +218,8 @@ mse_df.drop('number_of_trajectories', axis=1, inplace=True)
 
 combined_df = pd.concat([sobo_df, mse_df], axis=1, keys=['sobolov', 'mse'])
 combined_df *= 1e4
-# %%
-sobo_df
+
+combined_df
 # %%
 
 combined_df.to_latex(

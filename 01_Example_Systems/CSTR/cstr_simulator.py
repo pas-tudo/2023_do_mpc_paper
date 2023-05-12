@@ -49,6 +49,8 @@ def get_simulator(model):
     simulator.set_param(**params_simulator)
 
     tvp_num = simulator.get_tvp_template()
+    tvp_num['C_b_set'] = 0.8
+
     def tvp_fun(t_now):
         return tvp_num
 

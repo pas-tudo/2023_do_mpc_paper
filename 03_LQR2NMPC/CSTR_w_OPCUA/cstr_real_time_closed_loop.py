@@ -74,11 +74,12 @@ def send_mpc_to_process(read_tags, write_tags, runtime):
     # Disconnect client from server
     rt_mpc_p.disconnect()
 
+
 def send_sim_to_process(q, read_tags, write_tags, runtime):
     # Setup do-mpc model
     model_p = cstr_model.get_model()
     # Initiate simulator class
-    simulator_p = cstr_simulator.get_simulator(model_p)
+    simulator_p = cstr_simulator.get_simulator(model_p, t_step=0.000556)
     # Set initial guess
     simulator_p.x0 = np.array([0.2, 0.5, 120.0, 120.0]).reshape(-1,1)
 
@@ -139,7 +140,7 @@ if __name__ == '__main__':
     res = q.get()
     
     # Save data as pickle
-    with open('res_opc_u_check.pkl','wb') as handle:
+    with open('cstr_res_closed_loop_real_time.pkl','wb') as handle:
         pickle.dump(res, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     # Close child processes and Server/Client operation

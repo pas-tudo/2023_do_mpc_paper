@@ -22,7 +22,7 @@ import cstr_simulator
 model = cstr_model.get_model()
 bound_dict = json.load(open(os.path.join(example_path, 'config','cstr_bounds.json')))
 mpc, mpc_tvp_template  = cstr_controller.get_mpc(model, bound_dict)
-simulator = cstr_simulator.get_simulator(model)
+simulator = cstr_simulator.get_simulator(model, t_step=0.000556)
 
 
 # A function to define an initial state for a do-mpc object
@@ -41,7 +41,7 @@ def run_closed_loop(controller, simulator, N_sim = 100):
     set_initial_and_reset(simulator)
     controller.set_initial_guess()
 
-    x0 = np.array([0.2, 0.5, 120.0, 120.0]).reshape(-1,1)
+    x0 = simulator.x0
     # Main loop
     for k in range(N_sim):
         u0 = controller.make_step(x0)
@@ -50,7 +50,7 @@ def run_closed_loop(controller, simulator, N_sim = 100):
 
 #%% Run the closed loop and save simulator.data as .pkl
 
-run_closed_loop(mpc, simulator, N_sim = 500)
+run_closed_loop(mpc, simulator, N_sim = 300)
 
-with open('res_no_opc_check.pkl','wb') as handle:
+with open('cstr_res_closed_loop_ideal.pkl','wb') as handle:
     pickle.dump(simulator.data, handle, protocol=pickle.HIGHEST_PROTOCOL)

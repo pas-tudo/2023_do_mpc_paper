@@ -27,15 +27,15 @@ color = mpl.rcParams['axes.prop_cycle'].by_key()['color']
 # Load the results and a dict containing the constraints:
 #%% 
 # Paths to constraints-dict and simulator.data
-example_path = os.path.join('01_Example_Systems','CSTR')
-data_path = os.path.join('03_LQR2NMPC','CSTR_w_OPCUA','results')
-# example_path = os.path.join('..','..','01_Example_Systems','CSTR')
-# data_path = os.path.join('..','..','03_LQR2NMPC','CSTR_w_OPCUA','results')
+# example_path = os.path.join('01_Example_Systems','CSTR')
+# data_path = os.path.join('03_LQR2NMPC','CSTR_w_OPCUA','results')
+example_path = os.path.join('..','..','01_Example_Systems','CSTR')
+data_path = os.path.join('..','..','03_LQR2NMPC','CSTR_w_OPCUA','results')
 sys.path.append(example_path)
 
 # Load the data
-data_opc = pd.read_pickle(data_path +'/res_opc_u_check.pkl')
-data = pd.read_pickle(data_path +'/res_no_opc_check.pkl')
+data_opc = pd.read_pickle(data_path +'/cstr_res_closed_loop_real_time.pkl')
+data = pd.read_pickle(data_path +'/cstr_res_closed_loop_ideal.pkl')
 
 # Load dict containing the constraints information
 bound_dict = json.load(open(os.path.join(example_path, 'config','cstr_bounds.json')))
@@ -61,13 +61,13 @@ def cons_viol(res, bound_dict):
 cost_opc = sum(data_opc['_aux','closed_loop_cost'][:len(data_opc['_x'])])
 cost_wo_opc = sum(data['_aux','closed_loop_cost'][:len(data_opc['_x'])])
 
-print(f'Cost online: {float(cost_opc)}, cost offline: {float(cost_wo_opc)}')
+print(f'Closed-loop cost real time simulation with OPC UA: {float(cost_opc)}, Closed-loop cost without time delay: {float(cost_wo_opc)}')
 print(f'OPCUA leads to an increase of {float(100 - cost_wo_opc/cost_opc*100)}%')
 print(f'Constraint-viol. X1-X4:{max(cons_viol(data_opc,bound_dict)[:,0]),max(cons_viol(data_opc,bound_dict)[:,1]),max(cons_viol(data_opc,bound_dict)[:,2]**2),max(cons_viol(data_opc,bound_dict)[:,3]**2)}')
 
 
 #%% [markdown]
-
+### Visualization
 # Visualize the closed loop costs along with the concentrations
 
 #%%
@@ -85,5 +85,5 @@ ax[1].plot(data['_x'][:len(data_opc['_x']),1],':',label='$c_{b}$')
 ax[1].legend()
 ax[1].set_ylabel('Concentration [mol/l]')
 ax[1].set_xlabel('Time')
-
+plt.show(block=True)
 #%%

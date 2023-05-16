@@ -58,7 +58,7 @@ def send_mpc_to_process(read_tags, write_tags, runtime):
     controller_p.set_initial_guess()
 
     # Define client optiones
-    client_opts = do_mpc.opcua.ClientOpts("Bio Reactor OPCUA Client_MPC","opc.tcp://localhost:4840/freeopcua/server/",4840)
+    client_opts = do_mpc.opcua.ClientOpts("Bio Reactor OPCUA Client_MPC","opc.tcp://localhost:4840/freeopcua/server/",4840, 3600)
     # Initialize OPC UA client wrapper
     rt_mpc_p = do_mpc.opcua.RTBase(controller_p, client_opts)
     # Set tags to read and write
@@ -84,7 +84,7 @@ def send_sim_to_process(q, read_tags, write_tags, runtime):
     simulator_p.x0 = np.array([0.2, 0.5, 120.0, 120.0]).reshape(-1,1)
 
     # Define Client options
-    client_opts = do_mpc.opcua.ClientOpts("Bio Reactor OPCUA Client_SIM","opc.tcp://localhost:4840/freeopcua/server/",4840)
+    client_opts = do_mpc.opcua.ClientOpts("Bio Reactor OPCUA Client_SIM","opc.tcp://localhost:4840/freeopcua/server/",4840, 3600)
     # Initialize OPC UA client wrapper
     rt_sim_p = do_mpc.opcua.RTBase(simulator_p, client_opts)
     # Set tags to read and write

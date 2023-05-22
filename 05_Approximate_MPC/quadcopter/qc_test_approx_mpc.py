@@ -32,7 +32,7 @@ simulator, sim_p_template = qccontrol.get_simulator(t_step, qcmodel.get_model(qc
 # %%
 
 # Load keras model
-keras_model = keras.models.load_model(os.path.join('models','05_qc_approx_mpc_model'))
+keras_model = keras.models.load_model(os.path.join('meta_analysis','models_meta_02', 'qc_meta_traj_40_gamma_100'))
 # keras_model.layers[-1].invert = True
 
 ampc = ApproxMPC(keras_model, n_u=4, n_x=12, u0=0.067*np.ones((4,1)))
@@ -50,7 +50,7 @@ qccontrol.mpc_fly_trajectory(
     simulator, 
     ampc, 
     sim_p_template, 
-    N_iter=300, 
+    N_iter=200, 
     callbacks=[res_plot.draw,], 
     trajectory=tracjectory,
     noise_dist=1e-2)

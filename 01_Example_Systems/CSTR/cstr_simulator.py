@@ -31,7 +31,7 @@ sys.path.append(rel_do_mpc_path)
 import do_mpc
 
 
-def get_simulator(model):
+def get_simulator(model, t_step=0.005):
     """
     --------------------------------------------------------------------------
     template_optimizer: tuning parameters
@@ -43,12 +43,14 @@ def get_simulator(model):
         'integration_tool': 'cvodes',
         'abstol': 1e-10,
         'reltol': 1e-10,
-        't_step': 0.005
+        't_step': t_step
     }
 
     simulator.set_param(**params_simulator)
 
     tvp_num = simulator.get_tvp_template()
+    tvp_num['C_b_set'] = 0.8
+
     def tvp_fun(t_now):
         return tvp_num
 

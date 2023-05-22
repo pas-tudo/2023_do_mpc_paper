@@ -81,7 +81,8 @@ def get_model():
     # Set expression. These can be used in the cost function, as non-linear constraints
     # or just to monitor another output.
     T_dif = model.set_expression(expr_name='T_dif', expr=T_R-T_K)
-
+    Cost = model.set_expression(expr_name='closed_loop_cost', expr=(C_b - C_b_set)**2 )
+    
     # Expressions can also be formed without beeing explicitly added to the model.
     # The main difference is that they will not be monitored and can only be used within the current file.
     K_1 = beta * K0_ab * exp((-E_A_ab)/((T_R+273.15)))

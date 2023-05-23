@@ -1,8 +1,7 @@
 # %% [markdown]
-"""
-# Robust multi-stage with CSTR
+# # Robust multi-stage with CSTR
+# Comparison of robust multi-stage vs. nominal MPC for the nominal CSTR system and a CSTR with parametric uncertainty.
 
-"""
 # %% [code]
 # Import packages
 
@@ -17,12 +16,13 @@ import importlib
 import sys 
 import os
 import json
-import pathlib
 import importlib
 
 from casadi import *
 from casadi.tools import *
 
+IS_INTERACTIVE = hasattr(sys, 'ps1')
+# %%
 # CSTR files
 example_path = os.path.join('..','..','01_Example_Systems','CSTR')
 sys.path.append(example_path)
@@ -33,9 +33,8 @@ import cstr_simulator
 # Control packages
 import do_mpc
 
-IS_INTERACTIVE = hasattr(sys, 'ps1')
 
-
+# %%
 plot_path = os.path.join('..','..','00_plotting')
 sys.path.append(plot_path)
 import mplconfig
@@ -44,17 +43,14 @@ mplconfig.config_mpl(os.path.join('..','..','00_plotting','notation.tex'))
 
 # %% [markdown]
 
-# # Get do-mpc module instances
-
+# ## Get a CSTR model and the dictionary containing the bounds
 # %% [code]
-
 
 model = cstr_model.get_model()
 bound_dict = json.load(open(os.path.join(example_path, 'config','cstr_bounds.json')))
-mpc, mpc_tvp_template  = cstr_controller.get_mpc(model, bound_dict)
-simulator = cstr_simulator.get_simulator(model)
 
-
+# %% [markdown]
+# ## Create some functions for the evaluation
 # %%
 
 def set_initial_and_reset(obj):
@@ -70,6 +66,8 @@ def set_initial_and_reset(obj):
 
     obj.x0 = x0
 
+# %%
+
 def run_closed_loop(controller, simulator, N_sim = 100):
     # Set the initial state of mpc and simulator:
     set_initial_and_reset(controller)
@@ -84,6 +82,10 @@ def run_closed_loop(controller, simulator, N_sim = 100):
         u0 = controller.make_step(x0)
         x0 = simulator.make_step(u0)
 
+        do_mpc.tools.printProgressBar(k, N_sim-1, prefix='Closed-loop simulation:', length=50)
+
+# %%
+
 
 def plot_results(controller, simulator, bounds, fig_ax = None):
 
@@ -93,7 +95,7 @@ def plot_results(controller, simulator, bounds, fig_ax = None):
         fig, ax = fig_ax
 
     t = simulator.data['_time']
-    t_pred = controller.t0 + controller.t_step*np.arange(-1, controller.n_horizon).reshape(-1,1)
+    t_pred = controller.t0 + controller.settings.t_step*np.arange(-1, controller.settings.n_horizon).reshape(-1,1)
 
 
     # C_a
@@ -144,7 +146,10 @@ def plot_results(controller, simulator, bounds, fig_ax = None):
 
 
 # %% [markdown]
-# ## Investigation I: Nominal MPC without uncertainties.
+# ## Investigation I: Nominal MPC without uncertainties
+# The model contains two parameters $\alpha$ and $\beta$. By default these values are set to 1.0 for the simulator 
+# and the MPC controller. In this investigation the default values are used. 
+# We create a **nominal MPC controller** and use control the system. 
 
 # %% 
 
@@ -157,6 +162,7 @@ tvp_1['_tvp', :, 'C_b_set'] = 1
 run_closed_loop(mpc_1, sim_1, N_sim = 50)
 # %% [markdown]
 # ## Investigation II: Robust MPC without uncertainties.
+# In this investigation we use the same model as in the previous investigation, but we use a **multi-stage robust MPC controller**.
 
 # %%
 mpc_2, tvp_2 = cstr_controller.get_mpc(model, bound_dict, overwrite_settings = {'n_robust': 1})
@@ -167,7 +173,7 @@ tvp_2['_tvp', :, 'C_b_set'] = 1
 
 run_closed_loop(mpc_2, sim_2, N_sim = 50)
 # %% [markdown]
-# ## Plot comparison
+# ## Plot comparison of nominal and robust MPC for the nominal CSTR
 
 # %%
 fig, ax = plot_results(mpc_2, sim_2, bound_dict)
@@ -187,7 +193,9 @@ fig.savefig(os.path.join(savepath, '03_robust_vs_nominal_exact_parameters.pgf'))
 
 # %% [markdown]
 
-# ## Investigation III: Nominal MPC with uncertainties.
+# ## Investigation III: Nominal MPC with uncertainties
+# In this investigation we modify the value of $\alpha$ and $\beta$ in the simulator. 
+# We still use a **nominal MPC controller** which is oblivious to the uncertainties in the model.
 
 # %%
 
@@ -202,7 +210,13 @@ p_sim_3['beta'] = 1.02
 run_closed_loop(mpc_3, sim_3, N_sim = 50)
 # %% [markdown]
 
-# ## Investigation IV: Robust MPC with uncertainties.
+# ## Investigation IV: Robust MPC with uncertainties
+# Finally, we use the **multi-stage robust MPC controller** and the uncertain simulator.
+# The robust MPC controller is setup to consider multiple scenarios of the uncertain parameters.
+# The exact scenario used for the simulator is not known to the controller and not used as a scenario. 
+
+# %% [markdown]
+# ## Plot comparison of nominal and robust MPC for the uncertain CSTR
 
 # %%
 

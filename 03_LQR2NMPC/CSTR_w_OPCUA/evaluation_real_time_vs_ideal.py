@@ -1,41 +1,34 @@
 #%% [markdown]
 ## OPC UA operated MPC testing vs. offline synchronized MPC testing
-# Import necessary librarys and change some mpl values:
+
 #%%
 import numpy as np
-import pandas as pd
 import os
 import sys
 import json
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import pickle
 
-mpl.rcParams.update({
-    'lines.linewidth':2,
-    'font.size': 14,
-    'axes.labelsize': 'large',
-    'figure.figsize': (15, 7),
-    'axes.grid': True,
-    'lines.markersize': 10,
-    'axes.unicode_minus': False,
-    'ps.fonttype': 42,            
-    'pdf.fonttype': 42,           
-})
-color = mpl.rcParams['axes.prop_cycle'].by_key()['color']
+plot_path = os.path.join('..','..','00_plotting')
+sys.path.append(plot_path)
+import mplconfig
+mplconfig.config_mpl(os.path.join('..','..','00_plotting','notation.tex'))
 
 #%% [markdown]
 # Load the results and a dict containing the constraints:
 #%% 
 # Paths to constraints-dict and simulator.data
-# example_path = os.path.join('01_Example_Systems','CSTR')
-# data_path = os.path.join('03_LQR2NMPC','CSTR_w_OPCUA','results')
 example_path = os.path.join('..','..','01_Example_Systems','CSTR')
 data_path = os.path.join('..','..','03_LQR2NMPC','CSTR_w_OPCUA','results')
 sys.path.append(example_path)
 
 # Load the data
-data_opc = pd.read_pickle(data_path +'/cstr_res_closed_loop_real_time.pkl')
-data = pd.read_pickle(data_path +'/cstr_res_closed_loop_ideal.pkl')
+with open(os.path.join(data_path, 'cstr_res_closed_loop_real_time.pkl'), 'rb') as f:
+    data_opc = pickle.load(f)
+
+with open(os.path.join(data_path, 'cstr_res_closed_loop_ideal.pkl'), 'rb') as f:
+    data = pickle.load(f)
 
 # Load dict containing the constraints information
 bound_dict = json.load(open(os.path.join(example_path, 'config','cstr_bounds.json')))
@@ -73,15 +66,18 @@ print(f'Constraint-viol. X1-X4:{max(cons_viol(data_opc,bound_dict)[:,0]),max(con
 #%%
 
 fig, ax = plt.subplots(2,1, sharex=True)
-ax[0].plot(data_opc['_aux'][:len(data_opc['_x']),-1], label='$cost_{opc}$')
-ax[0].plot(data['_aux'][:len(data_opc['_x']),-1], label='cost')
+
+t_opc = data_opc['_time']
+t = data['_time'][:len(data_opc['_x'])]
+ax[0].plot(t_opc, data_opc['_aux','closed_loop_cost'][:len(data_opc['_x'])], label='cost$_{opcua}$')
+ax[0].plot(t, data['_aux', 'closed_loop_cost'][:len(data_opc['_x'])], label='cost')
 ax[0].legend()
 ax[0].set_ylabel('Cost')
 
-ax[1].plot(data_opc['_x'][:,0],label='$c_{a,opc}$')
-ax[1].plot(data_opc['_x'][:,1],label='$c_{b,opc}$')
-ax[1].plot(data['_x'][:len(data_opc['_x']),0],':',label='$c_{a}$')
-ax[1].plot(data['_x'][:len(data_opc['_x']),1],':',label='$c_{b}$')
+ax[1].plot(t_opc, data_opc['_x'][:,0],label='c$_{a,opcua}$')
+ax[1].plot(t_opc, data_opc['_x'][:,1],label='c$_{b,opcua}$')
+ax[1].plot(t, data['_x'][:len(data_opc['_x']),0],':',label='c$_{a}$')
+ax[1].plot(t, data['_x'][:len(data_opc['_x']),1],':',label='c$_{b}$')
 ax[1].legend()
 ax[1].set_ylabel('Concentration [mol/l]')
 ax[1].set_xlabel('Time')

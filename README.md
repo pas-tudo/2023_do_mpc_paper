@@ -6,7 +6,9 @@ this is the accompanying repository for our work "do-mpc: Towards FAIR nonlinear
 
 ## Installing the required packages
 
-We advise to clone this repository and create a local anaconda environment with the required packages. Assuming [miniconda or anaconda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) are installed on the system, use the terminal from the root of this repository and execute:
+We advise to clone this repository and create a local anaconda environment with the required packages. 
+Assuming [miniconda or anaconda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) 
+is installed on the system, use the terminal from the root of this repository and execute:
 
 ```
 conda env create --prefix ./.conda -f .conda_environment.yml  
@@ -22,23 +24,27 @@ conda activate ./.conda
 
 ### Introduction
 All results in this repository are created in python. We only have ``.py`` files under source-control (in Github). 
-As a snapshot of the obtained results, we export the [Python interactive window](https://code.visualstudio.com/docs/python/jupyter-support-py) (supported by Visual Studio Code) as Jupyter Notebooks. These Jupyter Notebooks are saved synchronized with [Git LFS](https://git-lfs.com). **For convenience, we highlight below, which files are Jupyter Notebooks and can be conveniently displayed in your browser.**
-Notice that snapshots are not possible for all files (in particular those that require **multiprocessing**). 
+As a snapshot of the obtained results, 
+we export the [Python interactive window](https://code.visualstudio.com/docs/python/jupyter-support-py) (supported by Visual Studio Code) as Jupyter Notebooks. 
+These Jupyter Notebooks are synchronized with [Git LFS](https://git-lfs.com). 
+**For convenience, we highlight below, which files are Jupyter Notebooks and can be conveniently displayed in your browser.**
+Notice that snapshots are not possible for all files (in particular those that require multiprocessing). 
 
 ### Where to find the investigated models
 
 - The CSTR model introduced in **Section 4** can be found [here](01_Example_Systems/CSTR/cstr_model.py). The model is used in investigations shown in Figure 3 and Figure 6.
-- The quadcopter model introduced in **Section 6** can be found [here](01_Example_Systems/quadcopter/qcmodel.py). A demonstration of the model is shown in [this Jupyter Notebook](01_Example_Systems/quadcopter/quadcopter_demo.ipynb). Results obtained with this model are shown in Figure 8.
+- The quadcopter model introduced in **Section 6** can be found [here](01_Example_Systems/quadcopter/qcmodel.py). Results obtained with this model are shown in Figure 8.
+- [**Jupyter**] A demonstration of the quadcopter model is shown in [this Jupyter Notebook](01_Example_Systems/quadcopter/quadcopter_demo.ipynb). 
 
 ### Where to find the results
 
 #### Figure 3: Comparison of robust vs. nominal MPC for the CSTR
 - [**Jupyter**] The obtained results are created and shown [here](03_LQR2NMPC/CSTR_wo_OPCUA/cstr_comparison_robust_nominal.ipynb).
-- [**Jupyter**] Software-in-the-loop simulation with OPC UA (reported results in text) is evaluated [here](03_LQR2NMPC/CSTR_w_OPCUA/evaluation_real_time_vs_ideal.ipynb)
+- [**Jupyter**] Software-in-the-loop simulation with **OPC UA** (results reported in text) is evaluated [here](03_LQR2NMPC/CSTR_w_OPCUA/evaluation_real_time_vs_ideal.ipynb)
 
 #### Figure 6: MPC controller for CSTR with exact model and neural network model
-- System identification data-generation with sampling framework shown [here](04_Data_based_NMPC/CSTR/data_generation/cstr_data_generation.py)
-- [**Jupyter**] Training of neural network system model and ONNX export shown [here](https://github.com/pas-tudo/2023_do_mpc_paper/blob/main/04_Data_based_NMPC/CSTR/cstr_train_nn.ipynb)
+- System identification data-generation with **sampling framework** shown [here](04_Data_based_NMPC/CSTR/data_generation/cstr_data_generation.py)
+- [**Jupyter**] Training of neural network system model and ONNX export shown [here](https://github.com/pas-tudo/2023_do_mpc_paper/blob/main/04_Data_based_NMPC/CSTR/cstr_train_nn.ipynb). This script also contains a demo of how to use the **ONNX conversion tool**.
 - Closed-loop simulations using MPC with nominal model and MPC with neural network model for different $p=50$ different cases using the sampling framework shown [here](https://github.com/pas-tudo/2023_do_mpc_paper/blob/main/04_Data_based_NMPC/CSTR/evaluation/cstr_nn_meta_closed_loop_sampling.py).
 - [**Jupyter**] Evaluation of results (Figure 6) created [here](https://github.com/pas-tudo/2023_do_mpc_paper/blob/main/04_Data_based_NMPC/CSTR/evaluation/cstr_nn_meta_closed_loop_analysis.ipynb).
 

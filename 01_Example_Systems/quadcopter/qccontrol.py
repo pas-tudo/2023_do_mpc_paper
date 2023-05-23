@@ -202,6 +202,8 @@ def mpc_fly_trajectory(
     if v_x is None:
         v_x = _variance_state_noise
 
+    timer = do_mpc.tools.Timer()
+
     x0 = simulator.x0.cat.full()
     for k in range(N_iter):
         traj_setpoint = trajectory(simulator.t0).T
@@ -209,7 +211,9 @@ def mpc_fly_trajectory(
         sim_p_template['yaw_setpoint'] = traj_setpoint[-1]
         x0[:3] = x0[:3]-traj_setpoint[:3]
 
+        timer.tic()
         u0 = controller.make_step(x0)
+        timer.toc()
 
         u0 += np.random.uniform(-noise_dist, noise_dist, size=(4,1))
 
@@ -224,3 +228,5 @@ def mpc_fly_trajectory(
             break
 
         time.sleep(.04)
+
+    timer.info()

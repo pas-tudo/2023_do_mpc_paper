@@ -32,7 +32,7 @@ mpc.set_initial_guess()
 
 # %%
 
-figure_eight_trajectory = qctrajectory.get_wobbly_figure_eight(s=1.5, a=1.5, height=1, wobble=-1, rot=np.pi/2)
+figure_eight_trajectory = qctrajectory.get_wobbly_figure_eight(s=1, a=1, height=0, wobble=0.5, rot=np.pi/2)
 
 res_plot = plot_results.ResultPlot(qcconf, simulator.data, figsize=(12,8))
 simulator.x0['pos'] = figure_eight_trajectory(0).T[:3]
@@ -44,7 +44,7 @@ qccontrol.mpc_fly_trajectory(
     simulator, 
     mpc, 
     sim_p_template, 
-    N_iter=300, 
+    N_iter=200, 
     callbacks=[res_plot.draw], 
     trajectory=figure_eight_trajectory,
     noise_dist=2e-2)

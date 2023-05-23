@@ -1,33 +1,23 @@
 # 2022_do_mpc_paper
 
+Dear visitor,
 
-## Using Poetry
+this is the accompanying repository for our work "do-mpc: Towards FAIR nonlinear and robust model predictive control". In the spirit of FAIR research, the results shown in the paper can be recreated, reused or extended with the materials presented in this repository. Please note that it is required to install [do-mpc]([www.do-mpc.com](https://www.do-mpc.com/en/latest/) >v4.5.6.
 
-This project uses [Poetry](https://python-poetry.org/) for dependency management. To install Poetry, follow the instructions on the [Poetry website](https://python-poetry.org/docs/#installation).
-For a video introduction and motivation for Poetry watch [this video](https://www.youtube.com/watch?v=0f3moPe_bhk).
+## Installing the required packages
 
-**Installation and settings:**
+We advise to clone this repository and create a local anaconda environment with the required packages. Assuming [miniconda or anaconda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) are installed on the system, use the terminal from the root of this repository and execute:
 
-1. Install poetry:
 ```
-pip install poetry
+conda env create --prefix ./.conda -f .conda_environment.yml  
 ```
-2. Recommended settings for Poetry:
-    1. Set the virtual environment to be located in the project directory:
-    ```
-    poetry config virtualenvs.in-project true
-    ```
-    2. Deactivate modern installer:
-    ```
-    poetry config experimental.new-installer false
-    ```
-    This fixes the the issue mentioned [here](https://github.com/python-poetry/poetry/issues/7686).
 
-3. To install the dependencies, run:
-    ```
-    poetry install
-    ```
-4. To activate the virtual environment, run:
-    ```
-    poetry shell
-    ```
+This will create a directory called ``.conda`` containing the required packages for this repository. Activate the environment with:
+
+```
+conda activate ./.conda
+```
+
+## Structure of this repository
+
+Most results of this work can be recovered by executing the respective Python scripts. A few selected results are also exported as Jupyter Notebooks which can be directly displayed in the browser.

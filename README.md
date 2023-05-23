@@ -20,4 +20,9 @@ conda activate ./.conda
 
 ## Structure of this repository
 
-Most results of this work can be recovered by executing the respective Python scripts. A few selected results are also exported as Jupyter Notebooks which can be directly displayed in the browser.
+### Introduction
+All results in this repository are created in python. We only have ``.py`` files under source-control (in Github). 
+As a snapshot of the obtained results, we export the [Python interactive window](https://code.visualstudio.com/docs/python/jupyter-support-py) (supported by Visual Studio Code) as Jupyter Notebooks. These Jupyter Notebooks are saved synchronized with [Git LFS](https://git-lfs.com).
+Notice that snapshots are not possible for all files (in particular those that require **multiprocessing**). 
+
+### Where to find the results

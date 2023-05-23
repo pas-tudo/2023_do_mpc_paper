@@ -39,6 +39,8 @@ def get_mpc(model, bound_dict, overwrite_settings = {}):
 
     mpc.set_param(store_full_solution=True)
 
+    mpc.settings.supress_ipopt_output()
+
     mpc.scaling['_x', 'T_R'] = 100
     mpc.scaling['_x', 'T_K'] = 100
     mpc.scaling['_u', 'Q_dot'] = 2000

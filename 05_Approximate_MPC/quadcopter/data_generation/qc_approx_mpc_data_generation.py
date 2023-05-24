@@ -97,7 +97,7 @@ nlp_diff.settings.check_rank = False
 
 
 class SensitivityData:
-    def __init__(self, nlp_diff: do_mpc.differentiator.DoMPCDifferentiatior):
+    def __init__(self, nlp_diff: do_mpc.differentiator.DoMPCDifferentiator):
         self.nlp_diff = nlp_diff
         self.reset_history()
 
